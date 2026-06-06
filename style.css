@@ -23,11 +23,12 @@ font-size:50px;
 @media (max-width: 768px){
 
 .hero h1{
-font-size:32px;
+font-size:24px !important;
+line-height:1.2;
 }
 
 .container{
-width:90%;
+width:90% !important;
 }
 
 }
