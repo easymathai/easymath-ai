@@ -1,18 +1,20 @@
-function solveMath() {
+async function solveMath() {
+  const question = document.getElementById("question").value;
+  const result = document.getElementById("answer");
 
-    let question =
-        document.getElementById("question").value;
+  if (!question) {
+    result.innerHTML = "Please enter a math question.";
+    return;
+  }
 
-    try {
+  result.innerHTML = "Solving...";
 
-        let result = eval(question);
+  const response = await fetch("/api/solve", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question })
+  });
 
-        document.getElementById("answer").innerHTML =
-            "Answer: " + result;
-
-    } catch {
-
-        document.getElementById("answer").innerHTML =
-            "Please enter a valid math expression.";
-    }
+  const data = await response.json();
+  result.innerHTML = data.answer;
 }
