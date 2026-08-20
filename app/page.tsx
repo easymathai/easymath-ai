@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type HistoryItem = {
   question: string;
@@ -47,6 +47,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [darkMode, setDarkMode] = useState(false);
 
   const examples = [
     "25 + 15",
@@ -67,11 +68,23 @@ export default function Home() {
         setHistory([]);
       }
     }
+
+    const savedTheme = localStorage.getItem("easymath-theme");
+
+    if (savedTheme === "dark") {
+      setDarkMode(true);
+    }
   }, []);
 
   function saveHistory(items: HistoryItem[]) {
     setHistory(items);
     localStorage.setItem("easymath-history", JSON.stringify(items));
+  }
+
+  function toggleTheme() {
+    const nextTheme = !darkMode;
+    setDarkMode(nextTheme);
+    localStorage.setItem("easymath-theme", nextTheme ? "dark" : "light");
   }
 
   async function solveQuestion(customQuestion?: string) {
@@ -142,16 +155,35 @@ export default function Home() {
     ? parts["PRACTICE QUESTION"].replace(/Great job!.*$/s, "").trim()
     : "";
 
+  const theme = useMemo(
+    () => ({
+      page: darkMode ? "#0f172a" : "#f8fafc",
+      panel: darkMode ? "rgba(15,23,42,0.92)" : "rgba(255,255,255,0.96)",
+      panelSoft: darkMode ? "#111827" : "#ffffff",
+      text: darkMode ? "#e5e7eb" : "#172033",
+      muted: darkMode ? "#94a3b8" : "#64748b",
+      border: darkMode ? "#334155" : "#e2e8f0",
+      input: darkMode ? "#111827" : "#fbfdff",
+      buttonSoft: darkMode ? "#1e293b" : "#ffffff",
+      shadow: darkMode
+        ? "0 20px 55px rgba(0,0,0,0.25)"
+        : "0 20px 55px rgba(15,23,42,0.08)",
+    }),
+    [darkMode]
+  );
+
   return (
     <main
       style={{
         minHeight: "100vh",
-        background:
-          "radial-gradient(circle at top left, #dbeafe 0%, transparent 35%), radial-gradient(circle at bottom right, #dcfce7 0%, transparent 35%), #f8fafc",
-        padding: "28px 18px 40px",
+        background: darkMode
+          ? "radial-gradient(circle at top left, #1e3a8a 0%, transparent 30%), radial-gradient(circle at bottom right, #14532d 0%, transparent 30%), #0f172a"
+          : "radial-gradient(circle at top left, #dbeafe 0%, transparent 35%), radial-gradient(circle at bottom right, #dcfce7 0%, transparent 35%), #f8fafc",
+        padding: "24px 18px 40px",
         fontFamily:
           "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
-        color: "#172033",
+        color: theme.text,
+        transition: "all 0.25s ease",
       }}
     >
       <div
@@ -162,11 +194,13 @@ export default function Home() {
       >
         <header
           style={{
-            background: "rgba(255,255,255,0.82)",
-            border: "1px solid rgba(148,163,184,0.18)",
+            background: darkMode
+              ? "rgba(15,23,42,0.88)"
+              : "rgba(255,255,255,0.84)",
+            border: `1px solid ${theme.border}`,
             borderRadius: "24px",
-            padding: "22px 24px",
-            boxShadow: "0 18px 50px rgba(15,23,42,0.08)",
+            padding: "18px 22px",
+            boxShadow: theme.shadow,
             backdropFilter: "blur(16px)",
             marginBottom: "22px",
           }}
@@ -220,7 +254,7 @@ export default function Home() {
                 <p
                   style={{
                     margin: "4px 0 0",
-                    color: "#64748b",
+                    color: theme.muted,
                     fontSize: "15px",
                     fontWeight: 600,
                   }}
@@ -232,16 +266,47 @@ export default function Home() {
 
             <div
               style={{
-                padding: "11px 15px",
-                borderRadius: "999px",
-                background: "#eff6ff",
-                color: "#1d4ed8",
-                fontWeight: 800,
-                fontSize: "13px",
-                border: "1px solid #dbeafe",
+                display: "flex",
+                gap: "10px",
+                alignItems: "center",
+                flexWrap: "wrap",
               }}
             >
-              Making Math Easy for Everyone
+              <div
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: "999px",
+                  background: darkMode ? "#172554" : "#eff6ff",
+                  color: darkMode ? "#bfdbfe" : "#1d4ed8",
+                  fontWeight: 800,
+                  fontSize: "13px",
+                  border: darkMode
+                    ? "1px solid #1d4ed8"
+                    : "1px solid #dbeafe",
+                }}
+              >
+                Making Math Easy for Everyone
+              </div>
+
+              <button
+                onClick={toggleTheme}
+                style={{
+                  border: `1px solid ${theme.border}`,
+                  background: theme.buttonSoft,
+                  color: theme.text,
+                  width: "46px",
+                  height: "46px",
+                  borderRadius: "14px",
+                  cursor: "pointer",
+                  fontSize: "20px",
+                  boxShadow: darkMode
+                    ? "none"
+                    : "0 8px 20px rgba(15,23,42,0.05)",
+                }}
+                aria-label="Toggle theme"
+              >
+                {darkMode ? "☀️" : "🌙"}
+              </button>
             </div>
           </div>
         </header>
@@ -256,11 +321,11 @@ export default function Home() {
         >
           <section
             style={{
-              background: "rgba(255,255,255,0.96)",
-              border: "1px solid rgba(148,163,184,0.18)",
+              background: theme.panel,
+              border: `1px solid ${theme.border}`,
               borderRadius: "26px",
               padding: "30px",
-              boxShadow: "0 20px 55px rgba(15,23,42,0.08)",
+              boxShadow: theme.shadow,
             }}
           >
             <div
@@ -270,8 +335,8 @@ export default function Home() {
                 gap: "8px",
                 padding: "8px 12px",
                 borderRadius: "999px",
-                background: "#eef4ff",
-                color: "#2563eb",
+                background: darkMode ? "#172554" : "#eef4ff",
+                color: darkMode ? "#bfdbfe" : "#2563eb",
                 fontSize: "12px",
                 fontWeight: 900,
                 letterSpacing: "0.08em",
@@ -295,7 +360,7 @@ export default function Home() {
             <p
               style={{
                 margin: 0,
-                color: "#64748b",
+                color: theme.muted,
                 lineHeight: 1.65,
                 fontSize: "16px",
               }}
@@ -325,13 +390,15 @@ export default function Home() {
                 padding: "19px",
                 fontSize: "18px",
                 lineHeight: 1.55,
-                color: "#172033",
-                background: "#fbfdff",
-                border: "1.5px solid #dbe4f0",
+                color: theme.text,
+                background: theme.input,
+                border: `1.5px solid ${theme.border}`,
                 borderRadius: "17px",
                 outline: "none",
                 boxSizing: "border-box",
-                boxShadow: "inset 0 1px 2px rgba(15,23,42,0.03)",
+                boxShadow: darkMode
+                  ? "inset 0 1px 2px rgba(0,0,0,0.18)"
+                  : "inset 0 1px 2px rgba(15,23,42,0.03)",
               }}
             />
 
@@ -339,7 +406,7 @@ export default function Home() {
               <div
                 style={{
                   marginTop: "10px",
-                  color: "#b45309",
+                  color: "#f59e0b",
                   fontSize: "14px",
                   fontWeight: 700,
                 }}
@@ -362,15 +429,17 @@ export default function Home() {
                   onClick={() => solveQuestion(example)}
                   disabled={loading}
                   style={{
-                    border: "1px solid #dbe4f0",
-                    background: "#ffffff",
-                    color: "#334155",
+                    border: `1px solid ${theme.border}`,
+                    background: theme.buttonSoft,
+                    color: theme.text,
                     padding: "10px 14px",
                     borderRadius: "12px",
                     cursor: "pointer",
                     fontWeight: 700,
                     fontSize: "14px",
-                    boxShadow: "0 4px 12px rgba(15,23,42,0.03)",
+                    boxShadow: darkMode
+                      ? "none"
+                      : "0 4px 12px rgba(15,23,42,0.03)",
                   }}
                 >
                   {example}
@@ -410,9 +479,9 @@ export default function Home() {
                 onClick={clearEverything}
                 disabled={loading}
                 style={{
-                  border: "1px solid #dbe4f0",
-                  background: "white",
-                  color: "#475569",
+                  border: `1px solid ${theme.border}`,
+                  background: theme.buttonSoft,
+                  color: theme.text,
                   padding: "15px 22px",
                   borderRadius: "14px",
                   cursor: "pointer",
@@ -429,15 +498,17 @@ export default function Home() {
                 style={{
                   marginTop: "22px",
                   padding: "16px 18px",
-                  background: "#f8fbff",
-                  border: "1px solid #dbeafe",
+                  background: darkMode ? "#172554" : "#f8fbff",
+                  border: darkMode
+                    ? "1px solid #1d4ed8"
+                    : "1px solid #dbeafe",
                   borderRadius: "14px",
                 }}
               >
                 <div
                   style={{
                     fontWeight: 800,
-                    color: "#1d4ed8",
+                    color: darkMode ? "#bfdbfe" : "#1d4ed8",
                     marginBottom: "10px",
                   }}
                 >
@@ -449,7 +520,7 @@ export default function Home() {
                     height: "8px",
                     borderRadius: "999px",
                     overflow: "hidden",
-                    background: "#dbeafe",
+                    background: darkMode ? "#1e3a8a" : "#dbeafe",
                   }}
                 >
                   <div
@@ -486,7 +557,7 @@ export default function Home() {
                       style={{
                         fontSize: "12px",
                         fontWeight: 900,
-                        color: "#2563eb",
+                        color: darkMode ? "#93c5fd" : "#2563eb",
                         letterSpacing: "0.1em",
                         textTransform: "uppercase",
                       }}
@@ -508,8 +579,9 @@ export default function Home() {
                   <button
                     onClick={() => navigator.clipboard.writeText(solution)}
                     style={{
-                      border: "1px solid #cbd5e1",
-                      background: "white",
+                      border: `1px solid ${theme.border}`,
+                      background: theme.buttonSoft,
+                      color: theme.text,
                       borderRadius: "11px",
                       padding: "10px 14px",
                       cursor: "pointer",
@@ -525,15 +597,19 @@ export default function Home() {
                     style={{
                       padding: "22px",
                       borderRadius: "18px",
-                      background: "linear-gradient(135deg, #ecfdf5, #f0fdf4)",
-                      border: "1px solid #bbf7d0",
+                      background: darkMode
+                        ? "linear-gradient(135deg, #052e16, #14532d)"
+                        : "linear-gradient(135deg, #ecfdf5, #f0fdf4)",
+                      border: darkMode
+                        ? "1px solid #166534"
+                        : "1px solid #bbf7d0",
                     }}
                   >
                     <div
                       style={{
                         fontSize: "13px",
                         fontWeight: 900,
-                        color: "#15803d",
+                        color: darkMode ? "#86efac" : "#15803d",
                         marginBottom: "10px",
                       }}
                     >
@@ -557,15 +633,17 @@ export default function Home() {
                     style={{
                       padding: "22px",
                       borderRadius: "18px",
-                      background: "#eff6ff",
-                      border: "1px solid #bfdbfe",
+                      background: darkMode ? "#172554" : "#eff6ff",
+                      border: darkMode
+                        ? "1px solid #1d4ed8"
+                        : "1px solid #bfdbfe",
                     }}
                   >
                     <div
                       style={{
                         fontSize: "13px",
                         fontWeight: 900,
-                        color: "#1d4ed8",
+                        color: darkMode ? "#93c5fd" : "#1d4ed8",
                         marginBottom: "12px",
                       }}
                     >
@@ -589,15 +667,17 @@ export default function Home() {
                     style={{
                       padding: "22px",
                       borderRadius: "18px",
-                      background: "#fffbeb",
-                      border: "1px solid #fde68a",
+                      background: darkMode ? "#422006" : "#fffbeb",
+                      border: darkMode
+                        ? "1px solid #92400e"
+                        : "1px solid #fde68a",
                     }}
                   >
                     <div
                       style={{
                         fontSize: "13px",
                         fontWeight: 900,
-                        color: "#b45309",
+                        color: darkMode ? "#fcd34d" : "#b45309",
                         marginBottom: "10px",
                       }}
                     >
@@ -620,15 +700,17 @@ export default function Home() {
                     style={{
                       padding: "22px",
                       borderRadius: "18px",
-                      background: "#fff1f2",
-                      border: "1px solid #fecdd3",
+                      background: darkMode ? "#4c0519" : "#fff1f2",
+                      border: darkMode
+                        ? "1px solid #9f1239"
+                        : "1px solid #fecdd3",
                     }}
                   >
                     <div
                       style={{
                         fontSize: "13px",
                         fontWeight: 900,
-                        color: "#be123c",
+                        color: darkMode ? "#fda4af" : "#be123c",
                         marginBottom: "10px",
                       }}
                     >
@@ -651,15 +733,19 @@ export default function Home() {
                     style={{
                       padding: "22px",
                       borderRadius: "18px",
-                      background: "linear-gradient(135deg, #faf5ff, #f5f3ff)",
-                      border: "1px solid #ddd6fe",
+                      background: darkMode
+                        ? "linear-gradient(135deg, #2e1065, #3b0764)"
+                        : "linear-gradient(135deg, #faf5ff, #f5f3ff)",
+                      border: darkMode
+                        ? "1px solid #6d28d9"
+                        : "1px solid #ddd6fe",
                     }}
                   >
                     <div
                       style={{
                         fontSize: "13px",
                         fontWeight: 900,
-                        color: "#7c3aed",
+                        color: darkMode ? "#c4b5fd" : "#7c3aed",
                         marginBottom: "10px",
                       }}
                     >
@@ -708,10 +794,10 @@ export default function Home() {
                     padding: "16px 20px",
                     textAlign: "center",
                     borderRadius: "16px",
-                    background: "white",
-                    border: "1px solid #e2e8f0",
+                    background: theme.panelSoft,
+                    border: `1px solid ${theme.border}`,
                     fontWeight: 800,
-                    color: "#475569",
+                    color: theme.muted,
                   }}
                 >
                   🌟 Great job! Keep practising and you&apos;ll become stronger
@@ -723,11 +809,11 @@ export default function Home() {
 
           <aside
             style={{
-              background: "rgba(255,255,255,0.94)",
-              border: "1px solid rgba(148,163,184,0.18)",
+              background: theme.panel,
+              border: `1px solid ${theme.border}`,
               borderRadius: "26px",
               padding: "23px",
-              boxShadow: "0 20px 50px rgba(15,23,42,0.06)",
+              boxShadow: theme.shadow,
             }}
           >
             <div
@@ -769,7 +855,7 @@ export default function Home() {
                   style={{
                     border: "none",
                     background: "transparent",
-                    color: "#64748b",
+                    color: theme.muted,
                     cursor: "pointer",
                     fontWeight: 800,
                     fontSize: "13px",
@@ -785,8 +871,8 @@ export default function Home() {
                 style={{
                   padding: "20px",
                   borderRadius: "16px",
-                  background: "#f8fafc",
-                  color: "#64748b",
+                  background: darkMode ? "#111827" : "#f8fafc",
+                  color: theme.muted,
                   lineHeight: 1.6,
                   fontSize: "14px",
                 }}
@@ -812,12 +898,14 @@ export default function Home() {
                       width: "100%",
                       textAlign: "left",
                       padding: "15px",
-                      border: "1px solid #e2e8f0",
+                      border: `1px solid ${theme.border}`,
                       borderRadius: "14px",
-                      background: "white",
+                      background: theme.buttonSoft,
                       cursor: "pointer",
-                      color: "#263244",
-                      boxShadow: "0 4px 12px rgba(15,23,42,0.03)",
+                      color: theme.text,
+                      boxShadow: darkMode
+                        ? "none"
+                        : "0 4px 12px rgba(15,23,42,0.03)",
                     }}
                   >
                     <div
@@ -838,9 +926,10 @@ export default function Home() {
                 marginTop: "20px",
                 padding: "18px",
                 borderRadius: "17px",
-                background:
-                  "linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%)",
-                border: "1px solid #e2ebf6",
+                background: darkMode
+                  ? "linear-gradient(135deg, #172554 0%, #14532d 100%)"
+                  : "linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%)",
+                border: `1px solid ${theme.border}`,
               }}
             >
               <div
@@ -854,7 +943,7 @@ export default function Home() {
 
               <div
                 style={{
-                  color: "#64748b",
+                  color: theme.muted,
                   fontSize: "14px",
                   lineHeight: 1.6,
                 }}
@@ -869,7 +958,7 @@ export default function Home() {
         <p
           style={{
             textAlign: "center",
-            color: "#94a3b8",
+            color: theme.muted,
             marginTop: "24px",
             fontSize: "13px",
             fontWeight: 600,
