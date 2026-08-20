@@ -7,6 +7,40 @@ type HistoryItem = {
   solution: string;
 };
 
+function parseSolution(text: string) {
+  const headings = [
+    "FINAL ANSWER",
+    "STEP-BY-STEP EXPLANATION",
+    "WHY IT WORKS",
+    "COMMON MISTAKE",
+    "PRACTICE QUESTION",
+  ];
+
+  const result: Record<string, string> = {};
+
+  headings.forEach((heading, index) => {
+    const start = text.indexOf(heading);
+
+    if (start === -1) return;
+
+    const contentStart = start + heading.length;
+    let contentEnd = text.length;
+
+    for (let i = index + 1; i < headings.length; i++) {
+      const nextHeading = text.indexOf(headings[i], contentStart);
+
+      if (nextHeading !== -1) {
+        contentEnd = nextHeading;
+        break;
+      }
+    }
+
+    result[heading] = text.slice(contentStart, contentEnd).trim();
+  });
+
+  return result;
+}
+
 export default function Home() {
   const [question, setQuestion] = useState("");
   const [solution, setSolution] = useState("");
@@ -101,6 +135,12 @@ export default function Home() {
     setHistory([]);
     localStorage.removeItem("easymath-history");
   }
+
+  const parts = solution ? parseSolution(solution) : {};
+
+  const practiceQuestion = parts["PRACTICE QUESTION"]
+    ? parts["PRACTICE QUESTION"].replace(/Great job!.*$/s, "").trim()
+    : "";
 
   return (
     <main
@@ -429,24 +469,16 @@ export default function Home() {
               <div
                 style={{
                   marginTop: "28px",
-                  borderRadius: "20px",
-                  overflow: "hidden",
-                  border: "1px solid #d9e7ff",
-                  background:
-                    "linear-gradient(180deg, #f8fbff 0%, #ffffff 100%)",
-                  boxShadow: "0 14px 35px rgba(15,23,42,0.06)",
+                  display: "grid",
+                  gap: "16px",
                 }}
               >
                 <div
                   style={{
-                    padding: "18px 20px",
-                    borderBottom: "1px solid #e5edf8",
-                    background:
-                      "linear-gradient(135deg, #eff6ff 0%, #eefbf4 100%)",
                     display: "flex",
-                    alignItems: "center",
                     justifyContent: "space-between",
-                    gap: "12px",
+                    alignItems: "center",
+                    gap: "15px",
                   }}
                 >
                   <div>
@@ -455,19 +487,18 @@ export default function Home() {
                         fontSize: "12px",
                         fontWeight: 900,
                         color: "#2563eb",
-                        textTransform: "uppercase",
                         letterSpacing: "0.1em",
+                        textTransform: "uppercase",
                       }}
                     >
-                      Step-by-Step Solution
+                      EasyMath AI Solution
                     </div>
 
                     <div
                       style={{
                         marginTop: "5px",
                         fontWeight: 800,
-                        fontSize: "17px",
-                        color: "#172033",
+                        fontSize: "18px",
                       }}
                     >
                       {question}
@@ -479,9 +510,8 @@ export default function Home() {
                     style={{
                       border: "1px solid #cbd5e1",
                       background: "white",
-                      color: "#334155",
                       borderRadius: "11px",
-                      padding: "10px 13px",
+                      padding: "10px 14px",
                       cursor: "pointer",
                       fontWeight: 800,
                     }}
@@ -490,16 +520,202 @@ export default function Home() {
                   </button>
                 </div>
 
+                {parts["FINAL ANSWER"] && (
+                  <div
+                    style={{
+                      padding: "22px",
+                      borderRadius: "18px",
+                      background: "linear-gradient(135deg, #ecfdf5, #f0fdf4)",
+                      border: "1px solid #bbf7d0",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: 900,
+                        color: "#15803d",
+                        marginBottom: "10px",
+                      }}
+                    >
+                      ✅ FINAL ANSWER
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: "26px",
+                        fontWeight: 900,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {parts["FINAL ANSWER"]}
+                    </div>
+                  </div>
+                )}
+
+                {parts["STEP-BY-STEP EXPLANATION"] && (
+                  <div
+                    style={{
+                      padding: "22px",
+                      borderRadius: "18px",
+                      background: "#eff6ff",
+                      border: "1px solid #bfdbfe",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: 900,
+                        color: "#1d4ed8",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      📘 STEP-BY-STEP EXPLANATION
+                    </div>
+
+                    <div
+                      style={{
+                        whiteSpace: "pre-wrap",
+                        lineHeight: 1.85,
+                        fontSize: "16px",
+                      }}
+                    >
+                      {parts["STEP-BY-STEP EXPLANATION"]}
+                    </div>
+                  </div>
+                )}
+
+                {parts["WHY IT WORKS"] && (
+                  <div
+                    style={{
+                      padding: "22px",
+                      borderRadius: "18px",
+                      background: "#fffbeb",
+                      border: "1px solid #fde68a",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: 900,
+                        color: "#b45309",
+                        marginBottom: "10px",
+                      }}
+                    >
+                      💡 WHY IT WORKS
+                    </div>
+
+                    <div
+                      style={{
+                        whiteSpace: "pre-wrap",
+                        lineHeight: 1.75,
+                      }}
+                    >
+                      {parts["WHY IT WORKS"]}
+                    </div>
+                  </div>
+                )}
+
+                {parts["COMMON MISTAKE"] && (
+                  <div
+                    style={{
+                      padding: "22px",
+                      borderRadius: "18px",
+                      background: "#fff1f2",
+                      border: "1px solid #fecdd3",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: 900,
+                        color: "#be123c",
+                        marginBottom: "10px",
+                      }}
+                    >
+                      ⚠️ COMMON MISTAKE
+                    </div>
+
+                    <div
+                      style={{
+                        whiteSpace: "pre-wrap",
+                        lineHeight: 1.75,
+                      }}
+                    >
+                      {parts["COMMON MISTAKE"]}
+                    </div>
+                  </div>
+                )}
+
+                {practiceQuestion && (
+                  <div
+                    style={{
+                      padding: "22px",
+                      borderRadius: "18px",
+                      background: "linear-gradient(135deg, #faf5ff, #f5f3ff)",
+                      border: "1px solid #ddd6fe",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: 900,
+                        color: "#7c3aed",
+                        marginBottom: "10px",
+                      }}
+                    >
+                      🎯 YOUR TURN
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: "20px",
+                        fontWeight: 800,
+                        lineHeight: 1.6,
+                        whiteSpace: "pre-wrap",
+                      }}
+                    >
+                      {practiceQuestion}
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setQuestion(practiceQuestion);
+                        setSolution("");
+                        setMessage("");
+                        window.scrollTo({
+                          top: 0,
+                          behavior: "smooth",
+                        });
+                      }}
+                      style={{
+                        marginTop: "16px",
+                        border: "none",
+                        background: "#7c3aed",
+                        color: "white",
+                        padding: "11px 17px",
+                        borderRadius: "11px",
+                        fontWeight: 800,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Try This Question →
+                    </button>
+                  </div>
+                )}
+
                 <div
                   style={{
-                    padding: "24px",
-                    whiteSpace: "pre-wrap",
-                    fontSize: "17px",
-                    lineHeight: 1.82,
-                    color: "#263244",
+                    padding: "16px 20px",
+                    textAlign: "center",
+                    borderRadius: "16px",
+                    background: "white",
+                    border: "1px solid #e2e8f0",
+                    fontWeight: 800,
+                    color: "#475569",
                   }}
                 >
-                  {solution}
+                  🌟 Great job! Keep practising and you&apos;ll become stronger
+                  at maths.
                 </div>
               </div>
             )}
