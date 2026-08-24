@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type HistoryItem = {
   question: string;
@@ -49,6 +49,12 @@ export default function Home() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [darkMode, setDarkMode] = useState(false);
 
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState("");
+  const [imageLoading, setImageLoading] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const examples = [
     "25 + 15",
     "50 × 12",
@@ -83,8 +89,13 @@ export default function Home() {
 
   function toggleTheme() {
     const nextTheme = !darkMode;
+
     setDarkMode(nextTheme);
-    localStorage.setItem("easymath-theme", nextTheme ? "dark" : "light");
+
+    localStorage.setItem(
+      "easymath-theme",
+      nextTheme ? "dark" : "light"
+    );
   }
 
   async function solveQuestion(customQuestion?: string) {
@@ -127,7 +138,9 @@ export default function Home() {
           question: finalQuestion,
           solution: result,
         },
-        ...history.filter((item) => item.question !== finalQuestion),
+        ...history.filter(
+          (item) => item.question !== finalQuestion
+        ),
       ].slice(0, 10);
 
       saveHistory(updatedHistory);
@@ -138,10 +151,94 @@ export default function Home() {
     }
   }
 
+  function handleImage(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setMessage("Please select an image file.");
+      return;
+    }
+
+    setImageFile(file);
+    setSolution("");
+    setMessage("");
+
+    const preview = URL.createObjectURL(file);
+    setImagePreview(preview);
+  }
+
+  async function solveImage() {
+    if (!imageFile) {
+      setMessage("Please choose a photo first.");
+      return;
+    }
+
+    setImageLoading(true);
+    setSolution("");
+    setMessage("");
+    setQuestion("Math problem from uploaded photo");
+
+    try {
+      const formData = new FormData();
+      formData.append("image", imageFile);
+
+      const response = await fetch("/api/solve-image", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setSolution(
+          data.error || "Unable to solve the image."
+        );
+        return;
+      }
+
+      const result =
+        data.solution || "No solution returned.";
+
+      setSolution(result);
+
+      const updatedHistory = [
+        {
+          question: "📷 Math problem from photo",
+          solution: result,
+        },
+        ...history,
+      ].slice(0, 10);
+
+      saveHistory(updatedHistory);
+    } catch {
+      setSolution(
+        "Unable to connect to the photo solver."
+      );
+    } finally {
+      setImageLoading(false);
+    }
+  }
+
+  function removeImage() {
+    if (imagePreview) {
+      URL.revokeObjectURL(imagePreview);
+    }
+
+    setImageFile(null);
+    setImagePreview("");
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }
+
   function clearEverything() {
     setQuestion("");
     setSolution("");
     setMessage("");
+    removeImage();
   }
 
   function clearHistory() {
@@ -152,19 +249,31 @@ export default function Home() {
   const parts = solution ? parseSolution(solution) : {};
 
   const practiceQuestion = parts["PRACTICE QUESTION"]
-    ? parts["PRACTICE QUESTION"].replace(/Great job!.*$/s, "").trim()
+    ? parts["PRACTICE QUESTION"]
+        .replace(/Great job!.*$/s, "")
+        .trim()
     : "";
 
   const theme = useMemo(
     () => ({
       page: darkMode ? "#0f172a" : "#f8fafc",
-      panel: darkMode ? "rgba(15,23,42,0.92)" : "rgba(255,255,255,0.96)",
+
+      panel: darkMode
+        ? "rgba(15,23,42,0.92)"
+        : "rgba(255,255,255,0.96)",
+
       panelSoft: darkMode ? "#111827" : "#ffffff",
+
       text: darkMode ? "#e5e7eb" : "#172033",
+
       muted: darkMode ? "#94a3b8" : "#64748b",
+
       border: darkMode ? "#334155" : "#e2e8f0",
+
       input: darkMode ? "#111827" : "#fbfdff",
+
       buttonSoft: darkMode ? "#1e293b" : "#ffffff",
+
       shadow: darkMode
         ? "0 20px 55px rgba(0,0,0,0.25)"
         : "0 20px 55px rgba(15,23,42,0.08)",
@@ -176,14 +285,17 @@ export default function Home() {
     <main
       style={{
         minHeight: "100vh",
+
         background: darkMode
           ? "radial-gradient(circle at top left, #1e3a8a 0%, transparent 30%), radial-gradient(circle at bottom right, #14532d 0%, transparent 30%), #0f172a"
           : "radial-gradient(circle at top left, #dbeafe 0%, transparent 35%), radial-gradient(circle at bottom right, #dcfce7 0%, transparent 35%), #f8fafc",
+
         padding: "24px 18px 40px",
+
         fontFamily:
           "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+
         color: theme.text,
-        transition: "all 0.25s ease",
       }}
     >
       <div
@@ -194,14 +306,11 @@ export default function Home() {
       >
         <header
           style={{
-            background: darkMode
-              ? "rgba(15,23,42,0.88)"
-              : "rgba(255,255,255,0.84)",
+            background: theme.panel,
             border: `1px solid ${theme.border}`,
             borderRadius: "24px",
             padding: "18px 22px",
             boxShadow: theme.shadow,
-            backdropFilter: "blur(16px)",
             marginBottom: "22px",
           }}
         >
@@ -228,12 +337,13 @@ export default function Home() {
                   borderRadius: "18px",
                   display: "grid",
                   placeItems: "center",
+
                   background:
-                    "linear-gradient(135deg, #2563eb 0%, #16a34a 100%)",
+                    "linear-gradient(135deg, #2563eb, #16a34a)",
+
                   color: "white",
                   fontSize: "28px",
                   fontWeight: 900,
-                  boxShadow: "0 12px 30px rgba(37,99,235,0.24)",
                 }}
               >
                 ∑
@@ -245,7 +355,6 @@ export default function Home() {
                     margin: 0,
                     fontSize: "32px",
                     fontWeight: 900,
-                    letterSpacing: "-0.8px",
                   }}
                 >
                   EasyMath AI
@@ -255,7 +364,6 @@ export default function Home() {
                   style={{
                     margin: "4px 0 0",
                     color: theme.muted,
-                    fontSize: "15px",
                     fontWeight: 600,
                   }}
                 >
@@ -269,20 +377,23 @@ export default function Home() {
                 display: "flex",
                 gap: "10px",
                 alignItems: "center",
-                flexWrap: "wrap",
               }}
             >
               <div
                 style={{
                   padding: "10px 14px",
                   borderRadius: "999px",
-                  background: darkMode ? "#172554" : "#eff6ff",
-                  color: darkMode ? "#bfdbfe" : "#1d4ed8",
+
+                  background: darkMode
+                    ? "#172554"
+                    : "#eff6ff",
+
+                  color: darkMode
+                    ? "#bfdbfe"
+                    : "#1d4ed8",
+
                   fontWeight: 800,
                   fontSize: "13px",
-                  border: darkMode
-                    ? "1px solid #1d4ed8"
-                    : "1px solid #dbeafe",
                 }}
               >
                 Making Math Easy for Everyone
@@ -293,17 +404,12 @@ export default function Home() {
                 style={{
                   border: `1px solid ${theme.border}`,
                   background: theme.buttonSoft,
-                  color: theme.text,
                   width: "46px",
                   height: "46px",
                   borderRadius: "14px",
                   cursor: "pointer",
                   fontSize: "20px",
-                  boxShadow: darkMode
-                    ? "none"
-                    : "0 8px 20px rgba(15,23,42,0.05)",
                 }}
-                aria-label="Toggle theme"
               >
                 {darkMode ? "☀️" : "🌙"}
               </button>
@@ -314,7 +420,10 @@ export default function Home() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "minmax(0, 1.7fr) minmax(280px, 0.8fr)",
+
+            gridTemplateColumns:
+              "minmax(0,1.7fr) minmax(280px,0.8fr)",
+
             gap: "22px",
             alignItems: "start",
           }}
@@ -331,27 +440,28 @@ export default function Home() {
             <div
               style={{
                 display: "inline-flex",
-                alignItems: "center",
-                gap: "8px",
                 padding: "8px 12px",
                 borderRadius: "999px",
-                background: darkMode ? "#172554" : "#eef4ff",
-                color: darkMode ? "#bfdbfe" : "#2563eb",
-                fontSize: "12px",
+
+                background: darkMode
+                  ? "#172554"
+                  : "#eef4ff",
+
+                color: darkMode
+                  ? "#bfdbfe"
+                  : "#2563eb",
+
                 fontWeight: 900,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
+                fontSize: "12px",
               }}
             >
-              ✨ Ask EasyMath
+              ✨ ASK EASYMATH
             </div>
 
             <h2
               style={{
                 margin: "14px 0 8px",
                 fontSize: "31px",
-                lineHeight: 1.15,
-                letterSpacing: "-0.6px",
               }}
             >
               What math problem can I help you solve?
@@ -359,14 +469,12 @@ export default function Home() {
 
             <p
               style={{
-                margin: 0,
                 color: theme.muted,
-                lineHeight: 1.65,
-                fontSize: "16px",
+                lineHeight: 1.6,
               }}
             >
-              Type a calculation, percentage, square root, algebra equation,
-              or word problem. EasyMath AI will explain every step clearly.
+              Type your question or upload a photo of
+              homework, a worksheet, or handwritten math.
             </p>
 
             <textarea
@@ -376,38 +484,212 @@ export default function Home() {
                 setMessage("");
               }}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
+                if (
+                  e.key === "Enter" &&
+                  !e.shiftKey
+                ) {
                   e.preventDefault();
                   solveQuestion();
                 }
               }}
-              placeholder="Example: Ali has 100 chocolates and shares them equally among 4 friends. How many does each friend get?"
+              placeholder="Example: Solve x + 8 = 31"
               style={{
                 width: "100%",
-                minHeight: "155px",
-                resize: "vertical",
-                marginTop: "24px",
-                padding: "19px",
-                fontSize: "18px",
-                lineHeight: 1.55,
-                color: theme.text,
-                background: theme.input,
-                border: `1.5px solid ${theme.border}`,
-                borderRadius: "17px",
-                outline: "none",
+                minHeight: "150px",
+                marginTop: "20px",
+                padding: "18px",
                 boxSizing: "border-box",
-                boxShadow: darkMode
-                  ? "inset 0 1px 2px rgba(0,0,0,0.18)"
-                  : "inset 0 1px 2px rgba(15,23,42,0.03)",
+                borderRadius: "17px",
+                border: `1px solid ${theme.border}`,
+                background: theme.input,
+                color: theme.text,
+                fontSize: "18px",
               }}
             />
+
+            <div
+              style={{
+                marginTop: "18px",
+                display: "flex",
+                gap: "10px",
+                flexWrap: "wrap",
+              }}
+            >
+              {examples.map((example) => (
+                <button
+                  key={example}
+                  onClick={() =>
+                    solveQuestion(example)
+                  }
+                  disabled={
+                    loading || imageLoading
+                  }
+                  style={{
+                    border: `1px solid ${theme.border}`,
+                    background:
+                      theme.buttonSoft,
+
+                    color: theme.text,
+
+                    padding: "10px 14px",
+                    borderRadius: "12px",
+
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  {example}
+                </button>
+              ))}
+            </div>
+
+            <div
+              style={{
+                marginTop: "22px",
+                padding: "18px",
+
+                border: `1px dashed ${
+                  darkMode
+                    ? "#475569"
+                    : "#94a3b8"
+                }`,
+
+                borderRadius: "17px",
+                background: darkMode
+                  ? "#111827"
+                  : "#f8fafc",
+              }}
+            >
+              <div
+                style={{
+                  fontWeight: 900,
+                  fontSize: "16px",
+                  marginBottom: "6px",
+                }}
+              >
+                📷 Photo Solver
+              </div>
+
+              <div
+                style={{
+                  color: theme.muted,
+                  fontSize: "14px",
+                  marginBottom: "14px",
+                }}
+              >
+                Upload a photo of a math question and
+                EasyMath AI will read and solve it.
+              </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImage}
+                style={{
+                  display: "none",
+                }}
+              />
+
+              {!imagePreview && (
+                <button
+                  onClick={() =>
+                    fileInputRef.current?.click()
+                  }
+                  style={{
+                    border: `1px solid ${theme.border}`,
+
+                    background:
+                      theme.buttonSoft,
+
+                    color: theme.text,
+
+                    padding: "12px 17px",
+                    borderRadius: "12px",
+                    cursor: "pointer",
+                    fontWeight: 800,
+                  }}
+                >
+                  📷 Choose Photo
+                </button>
+              )}
+
+              {imagePreview && (
+                <div>
+                  <img
+                    src={imagePreview}
+                    alt="Math problem preview"
+                    style={{
+                      maxWidth: "100%",
+                      maxHeight: "350px",
+                      objectFit: "contain",
+                      borderRadius: "14px",
+                      border: `1px solid ${theme.border}`,
+                    }}
+                  />
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "10px",
+                      flexWrap: "wrap",
+                      marginTop: "14px",
+                    }}
+                  >
+                    <button
+                      onClick={solveImage}
+                      disabled={imageLoading}
+                      style={{
+                        border: "none",
+
+                        background:
+                          "linear-gradient(135deg,#16a34a,#15803d)",
+
+                        color: "white",
+
+                        padding: "13px 18px",
+                        borderRadius: "12px",
+
+                        fontWeight: 900,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {imageLoading
+                        ? "🤖 Reading Photo..."
+                        : "✨ Solve Photo"}
+                    </button>
+
+                    <button
+                      onClick={removeImage}
+                      disabled={imageLoading}
+                      style={{
+                        border: `1px solid ${theme.border}`,
+
+                        background:
+                          theme.buttonSoft,
+
+                        color: theme.text,
+
+                        padding: "13px 18px",
+
+                        borderRadius: "12px",
+
+                        fontWeight: 800,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {message && (
               <div
                 style={{
-                  marginTop: "10px",
+                  marginTop: "12px",
                   color: "#f59e0b",
-                  fontSize: "14px",
                   fontWeight: 700,
                 }}
               >
@@ -418,433 +700,409 @@ export default function Home() {
             <div
               style={{
                 display: "flex",
-                flexWrap: "wrap",
-                gap: "10px",
-                marginTop: "18px",
-              }}
-            >
-              {examples.map((example) => (
-                <button
-                  key={example}
-                  onClick={() => solveQuestion(example)}
-                  disabled={loading}
-                  style={{
-                    border: `1px solid ${theme.border}`,
-                    background: theme.buttonSoft,
-                    color: theme.text,
-                    padding: "10px 14px",
-                    borderRadius: "12px",
-                    cursor: "pointer",
-                    fontWeight: 700,
-                    fontSize: "14px",
-                    boxShadow: darkMode
-                      ? "none"
-                      : "0 4px 12px rgba(15,23,42,0.03)",
-                  }}
-                >
-                  {example}
-                </button>
-              ))}
-            </div>
-
-            <div
-              style={{
-                display: "flex",
                 gap: "12px",
                 marginTop: "22px",
-                flexWrap: "wrap",
               }}
             >
               <button
-                onClick={() => solveQuestion()}
-                disabled={loading}
+                onClick={() =>
+                  solveQuestion()
+                }
+                disabled={
+                  loading || imageLoading
+                }
                 style={{
                   border: "none",
+
                   background:
-                    "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
+                    "linear-gradient(135deg,#2563eb,#1d4ed8)",
+
                   color: "white",
+
                   padding: "15px 26px",
+
                   borderRadius: "14px",
-                  cursor: loading ? "wait" : "pointer",
+
                   fontWeight: 900,
                   fontSize: "16px",
-                  boxShadow: "0 12px 26px rgba(37,99,235,0.25)",
-                  opacity: loading ? 0.78 : 1,
+
+                  cursor: "pointer",
                 }}
               >
-                {loading ? "🤖 EasyMath AI is thinking..." : "✨ Solve Now"}
+                {loading
+                  ? "🤖 EasyMath AI is thinking..."
+                  : "✨ Solve Now"}
               </button>
 
               <button
                 onClick={clearEverything}
-                disabled={loading}
                 style={{
                   border: `1px solid ${theme.border}`,
-                  background: theme.buttonSoft,
+
+                  background:
+                    theme.buttonSoft,
+
                   color: theme.text,
+
                   padding: "15px 22px",
+
                   borderRadius: "14px",
-                  cursor: "pointer",
+
                   fontWeight: 800,
-                  fontSize: "15px",
+                  cursor: "pointer",
                 }}
               >
                 Clear
               </button>
             </div>
 
-            {loading && (
+            {(loading || imageLoading) && (
               <div
                 style={{
                   marginTop: "22px",
-                  padding: "16px 18px",
-                  background: darkMode ? "#172554" : "#f8fbff",
-                  border: darkMode
-                    ? "1px solid #1d4ed8"
-                    : "1px solid #dbeafe",
+                  padding: "16px",
+
                   borderRadius: "14px",
+
+                  background: darkMode
+                    ? "#172554"
+                    : "#eff6ff",
                 }}
               >
-                <div
-                  style={{
-                    fontWeight: 800,
-                    color: darkMode ? "#bfdbfe" : "#1d4ed8",
-                    marginBottom: "10px",
-                  }}
-                >
-                  EasyMath AI is working on your solution
-                </div>
-
-                <div
-                  style={{
-                    height: "8px",
-                    borderRadius: "999px",
-                    overflow: "hidden",
-                    background: darkMode ? "#1e3a8a" : "#dbeafe",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "72%",
-                      height: "100%",
-                      borderRadius: "999px",
-                      background:
-                        "linear-gradient(90deg, #2563eb 0%, #16a34a 100%)",
-                    }}
-                  />
-                </div>
+                <strong>
+                  🤖 EasyMath AI is working...
+                </strong>
               </div>
             )}
 
-            {solution && !loading && (
-              <div
-                style={{
-                  marginTop: "28px",
-                  display: "grid",
-                  gap: "16px",
-                }}
-              >
+            {solution &&
+              !loading &&
+              !imageLoading && (
                 <div
                   style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: "15px",
+                    marginTop: "28px",
+                    display: "grid",
+                    gap: "16px",
                   }}
                 >
-                  <div>
-                    <div
-                      style={{
-                        fontSize: "12px",
-                        fontWeight: 900,
-                        color: darkMode ? "#93c5fd" : "#2563eb",
-                        letterSpacing: "0.1em",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      EasyMath AI Solution
-                    </div>
-
-                    <div
-                      style={{
-                        marginTop: "5px",
-                        fontWeight: 800,
-                        fontSize: "18px",
-                      }}
-                    >
-                      {question}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => navigator.clipboard.writeText(solution)}
-                    style={{
-                      border: `1px solid ${theme.border}`,
-                      background: theme.buttonSoft,
-                      color: theme.text,
-                      borderRadius: "11px",
-                      padding: "10px 14px",
-                      cursor: "pointer",
-                      fontWeight: 800,
-                    }}
-                  >
-                    Copy
-                  </button>
-                </div>
-
-                {parts["FINAL ANSWER"] && (
                   <div
                     style={{
-                      padding: "22px",
-                      borderRadius: "18px",
-                      background: darkMode
-                        ? "linear-gradient(135deg, #052e16, #14532d)"
-                        : "linear-gradient(135deg, #ecfdf5, #f0fdf4)",
-                      border: darkMode
-                        ? "1px solid #166534"
-                        : "1px solid #bbf7d0",
+                      display: "flex",
+                      justifyContent:
+                        "space-between",
+                      gap: "15px",
                     }}
                   >
-                    <div
-                      style={{
-                        fontSize: "13px",
-                        fontWeight: 900,
-                        color: darkMode ? "#86efac" : "#15803d",
-                        marginBottom: "10px",
-                      }}
-                    >
-                      ✅ FINAL ANSWER
-                    </div>
+                    <div>
+                      <div
+                        style={{
+                          color: "#2563eb",
+                          fontWeight: 900,
+                          fontSize: "12px",
+                        }}
+                      >
+                        EASYMATH AI SOLUTION
+                      </div>
 
-                    <div
-                      style={{
-                        fontSize: "26px",
-                        fontWeight: 900,
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      {parts["FINAL ANSWER"]}
-                    </div>
-                  </div>
-                )}
-
-                {parts["STEP-BY-STEP EXPLANATION"] && (
-                  <div
-                    style={{
-                      padding: "22px",
-                      borderRadius: "18px",
-                      background: darkMode ? "#172554" : "#eff6ff",
-                      border: darkMode
-                        ? "1px solid #1d4ed8"
-                        : "1px solid #bfdbfe",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: "13px",
-                        fontWeight: 900,
-                        color: darkMode ? "#93c5fd" : "#1d4ed8",
-                        marginBottom: "12px",
-                      }}
-                    >
-                      📘 STEP-BY-STEP EXPLANATION
-                    </div>
-
-                    <div
-                      style={{
-                        whiteSpace: "pre-wrap",
-                        lineHeight: 1.85,
-                        fontSize: "16px",
-                      }}
-                    >
-                      {parts["STEP-BY-STEP EXPLANATION"]}
-                    </div>
-                  </div>
-                )}
-
-                {parts["WHY IT WORKS"] && (
-                  <div
-                    style={{
-                      padding: "22px",
-                      borderRadius: "18px",
-                      background: darkMode ? "#422006" : "#fffbeb",
-                      border: darkMode
-                        ? "1px solid #92400e"
-                        : "1px solid #fde68a",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: "13px",
-                        fontWeight: 900,
-                        color: darkMode ? "#fcd34d" : "#b45309",
-                        marginBottom: "10px",
-                      }}
-                    >
-                      💡 WHY IT WORKS
-                    </div>
-
-                    <div
-                      style={{
-                        whiteSpace: "pre-wrap",
-                        lineHeight: 1.75,
-                      }}
-                    >
-                      {parts["WHY IT WORKS"]}
-                    </div>
-                  </div>
-                )}
-
-                {parts["COMMON MISTAKE"] && (
-                  <div
-                    style={{
-                      padding: "22px",
-                      borderRadius: "18px",
-                      background: darkMode ? "#4c0519" : "#fff1f2",
-                      border: darkMode
-                        ? "1px solid #9f1239"
-                        : "1px solid #fecdd3",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: "13px",
-                        fontWeight: 900,
-                        color: darkMode ? "#fda4af" : "#be123c",
-                        marginBottom: "10px",
-                      }}
-                    >
-                      ⚠️ COMMON MISTAKE
-                    </div>
-
-                    <div
-                      style={{
-                        whiteSpace: "pre-wrap",
-                        lineHeight: 1.75,
-                      }}
-                    >
-                      {parts["COMMON MISTAKE"]}
-                    </div>
-                  </div>
-                )}
-
-                {practiceQuestion && (
-                  <div
-                    style={{
-                      padding: "22px",
-                      borderRadius: "18px",
-                      background: darkMode
-                        ? "linear-gradient(135deg, #2e1065, #3b0764)"
-                        : "linear-gradient(135deg, #faf5ff, #f5f3ff)",
-                      border: darkMode
-                        ? "1px solid #6d28d9"
-                        : "1px solid #ddd6fe",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: "13px",
-                        fontWeight: 900,
-                        color: darkMode ? "#c4b5fd" : "#7c3aed",
-                        marginBottom: "10px",
-                      }}
-                    >
-                      🎯 YOUR TURN
-                    </div>
-
-                    <div
-                      style={{
-                        fontSize: "20px",
-                        fontWeight: 800,
-                        lineHeight: 1.6,
-                        whiteSpace: "pre-wrap",
-                      }}
-                    >
-                      {practiceQuestion}
+                      <div
+                        style={{
+                          marginTop: "5px",
+                          fontWeight: 800,
+                        }}
+                      >
+                        {question}
+                      </div>
                     </div>
 
                     <button
-                      onClick={() => {
-                        setQuestion(practiceQuestion);
-                        setSolution("");
-                        setMessage("");
-                        window.scrollTo({
-                          top: 0,
-                          behavior: "smooth",
-                        });
-                      }}
+                      onClick={() =>
+                        navigator.clipboard.writeText(
+                          solution
+                        )
+                      }
                       style={{
-                        marginTop: "16px",
-                        border: "none",
-                        background: "#7c3aed",
-                        color: "white",
-                        padding: "11px 17px",
+                        border: `1px solid ${theme.border}`,
+
+                        background:
+                          theme.buttonSoft,
+
+                        color: theme.text,
+
                         borderRadius: "11px",
+                        padding: "10px 14px",
+
                         fontWeight: 800,
                         cursor: "pointer",
                       }}
                     >
-                      Try This Question →
+                      Copy
                     </button>
                   </div>
-                )}
 
-                <div
-                  style={{
-                    padding: "16px 20px",
-                    textAlign: "center",
-                    borderRadius: "16px",
-                    background: theme.panelSoft,
-                    border: `1px solid ${theme.border}`,
-                    fontWeight: 800,
-                    color: theme.muted,
-                  }}
-                >
-                  🌟 Great job! Keep practising and you&apos;ll become stronger
-                  at maths.
+                  {parts["FINAL ANSWER"] && (
+                    <div
+                      style={{
+                        padding: "22px",
+
+                        borderRadius: "18px",
+
+                        background: darkMode
+                          ? "#14532d"
+                          : "#ecfdf5",
+
+                        border:
+                          "1px solid #22c55e",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontWeight: 900,
+                          color: darkMode
+                            ? "#86efac"
+                            : "#15803d",
+                        }}
+                      >
+                        ✅ FINAL ANSWER
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: "26px",
+                          fontWeight: 900,
+                          marginTop: "10px",
+                        }}
+                      >
+                        {
+                          parts[
+                            "FINAL ANSWER"
+                          ]
+                        }
+                      </div>
+                    </div>
+                  )}
+
+                  {parts[
+                    "STEP-BY-STEP EXPLANATION"
+                  ] && (
+                    <div
+                      style={{
+                        padding: "22px",
+                        borderRadius: "18px",
+
+                        background: darkMode
+                          ? "#172554"
+                          : "#eff6ff",
+
+                        border:
+                          "1px solid #3b82f6",
+                      }}
+                    >
+                      <strong>
+                        📘 STEP-BY-STEP
+                      </strong>
+
+                      <div
+                        style={{
+                          whiteSpace:
+                            "pre-wrap",
+
+                          marginTop: "12px",
+
+                          lineHeight: 1.85,
+                        }}
+                      >
+                        {
+                          parts[
+                            "STEP-BY-STEP EXPLANATION"
+                          ]
+                        }
+                      </div>
+                    </div>
+                  )}
+
+                  {parts["WHY IT WORKS"] && (
+                    <div
+                      style={{
+                        padding: "22px",
+                        borderRadius: "18px",
+
+                        background: darkMode
+                          ? "#422006"
+                          : "#fffbeb",
+
+                        border:
+                          "1px solid #f59e0b",
+                      }}
+                    >
+                      <strong>
+                        💡 WHY IT WORKS
+                      </strong>
+
+                      <div
+                        style={{
+                          whiteSpace:
+                            "pre-wrap",
+
+                          marginTop: "10px",
+
+                          lineHeight: 1.7,
+                        }}
+                      >
+                        {
+                          parts[
+                            "WHY IT WORKS"
+                          ]
+                        }
+                      </div>
+                    </div>
+                  )}
+
+                  {parts[
+                    "COMMON MISTAKE"
+                  ] && (
+                    <div
+                      style={{
+                        padding: "22px",
+                        borderRadius: "18px",
+
+                        background: darkMode
+                          ? "#4c0519"
+                          : "#fff1f2",
+
+                        border:
+                          "1px solid #fb7185",
+                      }}
+                    >
+                      <strong>
+                        ⚠️ COMMON MISTAKE
+                      </strong>
+
+                      <div
+                        style={{
+                          whiteSpace:
+                            "pre-wrap",
+
+                          marginTop: "10px",
+
+                          lineHeight: 1.7,
+                        }}
+                      >
+                        {
+                          parts[
+                            "COMMON MISTAKE"
+                          ]
+                        }
+                      </div>
+                    </div>
+                  )}
+
+                  {practiceQuestion && (
+                    <div
+                      style={{
+                        padding: "22px",
+                        borderRadius: "18px",
+
+                        background: darkMode
+                          ? "#2e1065"
+                          : "#faf5ff",
+
+                        border:
+                          "1px solid #8b5cf6",
+                      }}
+                    >
+                      <strong>
+                        🎯 YOUR TURN
+                      </strong>
+
+                      <div
+                        style={{
+                          fontSize: "20px",
+                          fontWeight: 800,
+                          marginTop: "10px",
+                        }}
+                      >
+                        {practiceQuestion}
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setQuestion(
+                            practiceQuestion
+                          );
+
+                          setSolution("");
+
+                          window.scrollTo({
+                            top: 0,
+                            behavior:
+                              "smooth",
+                          });
+                        }}
+                        style={{
+                          marginTop: "16px",
+
+                          border: "none",
+
+                          background:
+                            "#7c3aed",
+
+                          color: "white",
+
+                          padding:
+                            "11px 17px",
+
+                          borderRadius:
+                            "11px",
+
+                          fontWeight: 800,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Try This Question →
+                      </button>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              )}
           </section>
 
           <aside
             style={{
               background: theme.panel,
+
               border: `1px solid ${theme.border}`,
+
               borderRadius: "26px",
+
               padding: "23px",
+
               boxShadow: theme.shadow,
             }}
           >
             <div
               style={{
                 display: "flex",
-                justifyContent: "space-between",
+
+                justifyContent:
+                  "space-between",
+
                 alignItems: "center",
-                gap: "12px",
-                marginBottom: "16px",
               }}
             >
               <div>
-                <p
+                <div
                   style={{
-                    margin: 0,
-                    fontSize: "12px",
-                    fontWeight: 900,
                     color: "#16a34a",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.1em",
-                  }}
-                >
-                  Your Work
-                </p>
 
-                <h3
-                  style={{
-                    margin: "6px 0 0",
-                    fontSize: "22px",
+                    fontSize: "12px",
+
+                    fontWeight: 900,
                   }}
                 >
+                  YOUR WORK
+                </div>
+
+                <h3>
                   Recent Questions
                 </h3>
               </div>
@@ -854,11 +1112,15 @@ export default function Home() {
                   onClick={clearHistory}
                   style={{
                     border: "none",
-                    background: "transparent",
+
+                    background:
+                      "transparent",
+
                     color: theme.muted,
-                    cursor: "pointer",
+
                     fontWeight: 800,
-                    fontSize: "13px",
+
+                    cursor: "pointer",
                   }}
                 >
                   Clear
@@ -866,90 +1128,82 @@ export default function Home() {
               )}
             </div>
 
-            {history.length === 0 ? (
-              <div
-                style={{
-                  padding: "20px",
-                  borderRadius: "16px",
-                  background: darkMode ? "#111827" : "#f8fafc",
-                  color: theme.muted,
-                  lineHeight: 1.6,
-                  fontSize: "14px",
-                }}
-              >
-                Your solved questions will appear here automatically.
-              </div>
-            ) : (
-              <div
-                style={{
-                  display: "grid",
-                  gap: "10px",
-                }}
-              >
-                {history.map((item, index) => (
+            <div
+              style={{
+                display: "grid",
+                gap: "10px",
+              }}
+            >
+              {history.map(
+                (item, index) => (
                   <button
-                    key={`${item.question}-${index}`}
+                    key={index}
                     onClick={() => {
-                      setQuestion(item.question);
-                      setSolution(item.solution);
-                      setMessage("");
+                      setQuestion(
+                        item.question
+                      );
+
+                      setSolution(
+                        item.solution
+                      );
                     }}
                     style={{
                       width: "100%",
+
                       textAlign: "left",
-                      padding: "15px",
+
+                      padding: "14px",
+
                       border: `1px solid ${theme.border}`,
-                      borderRadius: "14px",
-                      background: theme.buttonSoft,
-                      cursor: "pointer",
+
+                      borderRadius: "13px",
+
+                      background:
+                        theme.buttonSoft,
+
                       color: theme.text,
-                      boxShadow: darkMode
-                        ? "none"
-                        : "0 4px 12px rgba(15,23,42,0.03)",
+
+                      fontWeight: 700,
+
+                      cursor: "pointer",
                     }}
                   >
-                    <div
-                      style={{
-                        fontWeight: 800,
-                        lineHeight: 1.4,
-                      }}
-                    >
-                      {item.question}
-                    </div>
+                    {item.question}
                   </button>
-                ))}
-              </div>
-            )}
+                )
+              )}
+            </div>
 
             <div
               style={{
                 marginTop: "20px",
+
                 padding: "18px",
+
                 borderRadius: "17px",
+
                 background: darkMode
-                  ? "linear-gradient(135deg, #172554 0%, #14532d 100%)"
-                  : "linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%)",
-                border: `1px solid ${theme.border}`,
+                  ? "linear-gradient(135deg,#172554,#14532d)"
+                  : "linear-gradient(135deg,#eff6ff,#f0fdf4)",
               }}
             >
-              <div
-                style={{
-                  fontWeight: 900,
-                  marginBottom: "7px",
-                }}
-              >
+              <strong>
                 Student Tip
-              </div>
+              </strong>
 
               <div
                 style={{
+                  marginTop: "7px",
+
                   color: theme.muted,
+
                   fontSize: "14px",
+
                   lineHeight: 1.6,
                 }}
               >
-                Press Enter to solve instantly. Use Shift + Enter when you want
-                a new line.
+                Take a clear photo with the full math
+                question visible for the best result.
               </div>
             </div>
           </aside>
@@ -958,13 +1212,18 @@ export default function Home() {
         <p
           style={{
             textAlign: "center",
+
             color: theme.muted,
+
             marginTop: "24px",
+
             fontSize: "13px",
+
             fontWeight: 600,
           }}
         >
-          EasyMath AI • Learn the method, not just the answer.
+          EasyMath AI • Learn the method, not just the
+          answer.
         </p>
       </div>
     </main>
