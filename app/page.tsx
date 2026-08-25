@@ -250,7 +250,7 @@ export default function Home() {
 
   const practiceQuestion = parts["PRACTICE QUESTION"]
     ? parts["PRACTICE QUESTION"]
-        .replace(/Great job!.*$/s, "")
+        .replace(/Great job![\s\S]*$/, "")
         .trim()
     : "";
 
