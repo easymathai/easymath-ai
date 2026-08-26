@@ -156,7 +156,29 @@ export default function Home() {
 
     if (!file) return;
 
-    if (!file.type.startsWith("image/")) {
+    if (
+      file.type &&
+      !file.type.startsWith("image/") &&
+      !file.type.toLowerCase().includes("heic") &&
+      !file.type.toLowerCase().includes("heif")
+    ) {
+      setMessage("Please select an image file.");
+      return;
+    }
+
+    const name = file.name.toLowerCase();
+
+    if (
+      !file.type &&
+      !name.endsWith(".heic") &&
+      !name.endsWith(".heif") &&
+      !name.endsWith(".hif") &&
+      !name.endsWith(".jpg") &&
+      !name.endsWith(".jpeg") &&
+      !name.endsWith(".png") &&
+      !name.endsWith(".gif") &&
+      !name.endsWith(".webp")
+    ) {
       setMessage("Please select an image file.");
       return;
     }
@@ -584,7 +606,7 @@ export default function Home() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/*,.heic,.heif,.hif"
                 onChange={handleImage}
                 style={{
                   display: "none",
@@ -995,6 +1017,27 @@ export default function Home() {
                       </div>
                     </div>
                   )}
+
+                  {!parts["FINAL ANSWER"] &&
+                    !parts["STEP-BY-STEP EXPLANATION"] &&
+                    !parts["WHY IT WORKS"] &&
+                    !parts["COMMON MISTAKE"] &&
+                    !practiceQuestion && (
+                      <div
+                        style={{
+                          padding: "22px",
+                          borderRadius: "18px",
+                          background: darkMode
+                            ? "#172554"
+                            : "#eff6ff",
+                          border: "1px solid #3b82f6",
+                          whiteSpace: "pre-wrap",
+                          lineHeight: 1.85,
+                        }}
+                      >
+                        {solution}
+                      </div>
+                    )}
 
                   {practiceQuestion && (
                     <div
