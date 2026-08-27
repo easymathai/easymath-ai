@@ -16,6 +16,55 @@ const REQUIRED_HEADINGS = [
 const CLOSING_LINE =
   "Great job! 🌟 Keep practising and you'll become stronger at maths.";
 
+const STUDENT_LEVELS = ["primary", "middle", "high", "advanced"] as const;
+
+type StudentLevel = (typeof STUDENT_LEVELS)[number];
+
+function parseStudentLevel(value: unknown): StudentLevel {
+  if (typeof value === "string" && STUDENT_LEVELS.includes(value as StudentLevel)) {
+    return value as StudentLevel;
+  }
+
+  return "middle";
+}
+
+function getLevelStyleInstructions(level: StudentLevel): string {
+  const styles: Record<StudentLevel, string> = {
+    primary: `
+Student level: Primary.
+Write for a young child.
+Use very simple everyday words and short sentences.
+Break the working into small concrete steps.
+Avoid formal method names unless a very plain phrase is needed.
+`,
+    middle: `
+Student level: Middle School.
+Use the current EasyMath teaching style: friendly, clear numbered steps, and simple English for children and teenagers.
+`,
+    high: `
+Student level: High School.
+Use proper school terminology.
+Keep the working slightly more concise.
+Name the method where it is useful (for example, inverse operations, expanding brackets, or substituting).
+Stay student-friendly, not academic.
+`,
+    advanced: `
+Student level: Advanced.
+Be concise and a little more formal.
+Show efficient working without skipping a needed check.
+Stay readable and student-friendly. Do not write a university lecture.
+`,
+  };
+
+  return `
+Explanation style for this student:
+${styles[level]}
+Keep the mathematical FINAL ANSWER the same at every student level.
+Only change explanation tone, wording, and depth.
+Do not change numbers, algebra, or the correct result.
+`;
+}
+
 const teacherInstructions = `
 You are EasyMath AI, an expert and friendly mathematics teacher.
 
@@ -84,7 +133,7 @@ Check only for genuine math mistakes:
 - Is the arithmetic and algebra correct?
 - Does the reasoning contain a real math error that leads to a wrong result?
 
-Do NOT mark a solution as wrong for style, wording, teaching preference, extra explanation, or formatting.
+Do NOT mark a solution as wrong for style, wording, teaching preference, extra explanation, formatting, or student-level differences.
 If the math is correct, keep it. Equivalent exact forms are OK (for example 23/20 and 1 3/20).
 If the original correctly said the input is not a math problem, that is OK.
 
@@ -173,13 +222,17 @@ function parseCheckerOutput(
 
 async function checkSolution(
   question: string,
-  originalSolution: string
+  originalSolution: string,
+  level: StudentLevel
 ): Promise<string> {
   try {
     const checkerResponse = await openai.responses.create(
       {
         model: "gpt-5-mini",
-        instructions: checkerInstructions,
+        instructions: `${checkerInstructions}
+${getLevelStyleInstructions(level)}
+If you must output a corrected solution after ERROR, write that correction at this student level. Do not rewrite a mathematically correct solution.
+`,
         input: `Student question:\n${question}\n\nDraft EasyMath solution to check:\n${originalSolution}`,
       },
       {
@@ -209,6 +262,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const question = body.question;
+    const level = parseStudentLevel(body.level);
 
     if (!question || typeof question !== "string") {
       return NextResponse.json(
@@ -219,14 +273,16 @@ export async function POST(request: Request) {
 
     const response = await openai.responses.create({
       model: "gpt-5-mini",
-      instructions: teacherInstructions,
+      instructions: `${teacherInstructions}
+${getLevelStyleInstructions(level)}
+`,
       input: question,
     });
 
     const originalSolution = getOutputText(response) || response.output_text || "";
 
     const solution = originalSolution
-      ? await checkSolution(question, originalSolution)
+      ? await checkSolution(question, originalSolution, level)
       : originalSolution;
 
     return NextResponse.json({

@@ -7,6 +7,19 @@ type HistoryItem = {
   solution: string;
 };
 
+type StudentLevel = "primary" | "middle" | "high" | "advanced";
+
+const STUDENT_LEVELS: { id: StudentLevel; label: string }[] = [
+  { id: "primary", label: "Primary" },
+  { id: "middle", label: "Middle School" },
+  { id: "high", label: "High School" },
+  { id: "advanced", label: "Advanced" },
+];
+
+function isStudentLevel(value: string): value is StudentLevel {
+  return STUDENT_LEVELS.some((level) => level.id === value);
+}
+
 function parseSolution(text: string) {
   const headings = [
     "FINAL ANSWER",
@@ -48,6 +61,7 @@ export default function Home() {
   const [message, setMessage] = useState("");
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [darkMode, setDarkMode] = useState(false);
+  const [studentLevel, setStudentLevel] = useState<StudentLevel>("middle");
 
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState("");
@@ -80,6 +94,12 @@ export default function Home() {
     if (savedTheme === "dark") {
       setDarkMode(true);
     }
+
+    const savedLevel = localStorage.getItem("easymath-level");
+
+    if (savedLevel && isStudentLevel(savedLevel)) {
+      setStudentLevel(savedLevel);
+    }
   }, []);
 
   function saveHistory(items: HistoryItem[]) {
@@ -96,6 +116,11 @@ export default function Home() {
       "easymath-theme",
       nextTheme ? "dark" : "light"
     );
+  }
+
+  function selectStudentLevel(level: StudentLevel) {
+    setStudentLevel(level);
+    localStorage.setItem("easymath-level", level);
   }
 
   async function solveQuestion(customQuestion?: string) {
@@ -119,6 +144,7 @@ export default function Home() {
         },
         body: JSON.stringify({
           question: finalQuestion,
+          level: studentLevel,
         }),
       });
 
@@ -498,6 +524,73 @@ export default function Home() {
               Type your question or upload a photo of
               homework, a worksheet, or handwritten math.
             </p>
+
+            <div
+              style={{
+                marginTop: "18px",
+              }}
+            >
+              <div
+                style={{
+                  fontWeight: 900,
+                  fontSize: "16px",
+                  marginBottom: "6px",
+                }}
+              >
+                Student Level
+              </div>
+
+              <div
+                style={{
+                  color: theme.muted,
+                  fontSize: "14px",
+                  marginBottom: "12px",
+                }}
+              >
+                Same correct answer. Clearer explanation for your level.
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: "10px",
+                  flexWrap: "wrap",
+                }}
+              >
+                {STUDENT_LEVELS.map((level) => {
+                  const selected = studentLevel === level.id;
+
+                  return (
+                    <button
+                      key={level.id}
+                      type="button"
+                      onClick={() => selectStudentLevel(level.id)}
+                      style={{
+                        border: selected
+                          ? "1px solid #2563eb"
+                          : `1px solid ${theme.border}`,
+                        background: selected
+                          ? darkMode
+                            ? "#172554"
+                            : "#eef4ff"
+                          : theme.buttonSoft,
+                        color: selected
+                          ? darkMode
+                            ? "#bfdbfe"
+                            : "#2563eb"
+                          : theme.text,
+                        padding: "10px 14px",
+                        borderRadius: "12px",
+                        fontWeight: 800,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {level.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             <textarea
               value={question}
