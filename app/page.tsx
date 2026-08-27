@@ -67,7 +67,15 @@ export default function Home() {
   const [imagePreview, setImagePreview] = useState("");
   const [imageLoading, setImageLoading] = useState(false);
 
+  const [practiceAnswer, setPracticeAnswer] = useState("");
+  const [practiceChecking, setPracticeChecking] = useState(false);
+  const [practiceFeedback, setPracticeFeedback] = useState("");
+  const [practiceHint, setPracticeHint] = useState("");
+  const [practiceCorrect, setPracticeCorrect] = useState<boolean | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const latestSolutionRef = useRef(solution);
+  latestSolutionRef.current = solution;
 
   const examples = [
     "25 + 15",
@@ -101,6 +109,14 @@ export default function Home() {
       setStudentLevel(savedLevel);
     }
   }, []);
+
+  useEffect(() => {
+    setPracticeAnswer("");
+    setPracticeChecking(false);
+    setPracticeFeedback("");
+    setPracticeHint("");
+    setPracticeCorrect(null);
+  }, [solution]);
 
   function saveHistory(items: HistoryItem[]) {
     setHistory(items);
@@ -266,6 +282,81 @@ export default function Home() {
       );
     } finally {
       setImageLoading(false);
+    }
+  }
+
+  async function checkPracticeAnswer() {
+    if (!practiceQuestion.trim() || practiceChecking) {
+      return;
+    }
+
+    if (!practiceAnswer.trim()) {
+      setPracticeCorrect(null);
+      setPracticeHint("");
+      setPracticeFeedback("Please enter an answer to check.");
+      return;
+    }
+
+    setPracticeChecking(true);
+    setPracticeFeedback("");
+    setPracticeHint("");
+    setPracticeCorrect(null);
+
+    const solutionWhenChecked = solution;
+
+    try {
+      const response = await fetch("/api/check-practice", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          practiceQuestion,
+          studentAnswer: practiceAnswer,
+          level: studentLevel,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (latestSolutionRef.current !== solutionWhenChecked) {
+        return;
+      }
+
+      if (!response.ok) {
+        setPracticeCorrect(null);
+        setPracticeHint("");
+        setPracticeFeedback(
+          data.error || "Unable to check that answer. Please try again."
+        );
+        return;
+      }
+
+      setPracticeCorrect(Boolean(data.correct));
+      setPracticeFeedback(
+        typeof data.feedback === "string"
+          ? data.feedback
+          : data.correct
+            ? "Yes — that's right."
+            : "Not quite."
+      );
+      setPracticeHint(
+        data.correct ? "" : typeof data.hint === "string" ? data.hint : ""
+      );
+    } catch {
+      if (latestSolutionRef.current !== solutionWhenChecked) {
+        return;
+      }
+
+      setPracticeCorrect(null);
+      setPracticeHint("");
+      setPracticeFeedback(
+        "Unable to check that answer. Please try again."
+      );
+    } finally {
+      if (latestSolutionRef.current === solutionWhenChecked) {
+        setPracticeChecking(false);
+      }
     }
   }
 
@@ -1159,6 +1250,101 @@ export default function Home() {
                       >
                         {practiceQuestion}
                       </div>
+
+                      <input
+                        value={practiceAnswer}
+                        onChange={(e) => {
+                          setPracticeAnswer(e.target.value);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            checkPracticeAnswer();
+                          }
+                        }}
+                        placeholder="Type your answer"
+                        disabled={practiceChecking}
+                        style={{
+                          width: "100%",
+                          marginTop: "16px",
+                          padding: "14px 16px",
+                          boxSizing: "border-box",
+                          borderRadius: "12px",
+                          border: `1px solid ${
+                            darkMode ? "#6d28d9" : "#c4b5fd"
+                          }`,
+                          background: darkMode ? "#1e1b4b" : "#ffffff",
+                          color: theme.text,
+                          fontSize: "16px",
+                          fontWeight: 700,
+                        }}
+                      />
+
+                      <button
+                        type="button"
+                        onClick={checkPracticeAnswer}
+                        disabled={practiceChecking}
+                        style={{
+                          marginTop: "12px",
+                          border: "none",
+                          background: practiceChecking
+                            ? "#a78bfa"
+                            : "#7c3aed",
+                          color: "white",
+                          padding: "11px 17px",
+                          borderRadius: "11px",
+                          fontWeight: 800,
+                          cursor: practiceChecking
+                            ? "wait"
+                            : "pointer",
+                        }}
+                      >
+                        {practiceChecking
+                          ? "Checking..."
+                          : "Check Answer"}
+                      </button>
+
+                      {practiceFeedback && (
+                        <div
+                          style={{
+                            marginTop: "14px",
+                            padding: "14px 16px",
+                            borderRadius: "12px",
+                            background:
+                              practiceCorrect === true
+                                ? darkMode
+                                  ? "#14532d"
+                                  : "#dcfce7"
+                                : practiceCorrect === false
+                                  ? darkMode
+                                    ? "#4c0519"
+                                    : "#ffe4e6"
+                                  : darkMode
+                                    ? "#3b0764"
+                                    : "#ede9fe",
+                            border:
+                              practiceCorrect === true
+                                ? "1px solid #22c55e"
+                                : practiceCorrect === false
+                                  ? "1px solid #fb7185"
+                                  : "1px solid #8b5cf6",
+                            fontWeight: 700,
+                            lineHeight: 1.6,
+                          }}
+                        >
+                          {practiceFeedback}
+                          {practiceCorrect === false && practiceHint ? (
+                            <div
+                              style={{
+                                marginTop: "8px",
+                                fontWeight: 600,
+                              }}
+                            >
+                              Hint: {practiceHint}
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
 
                       <button
                         onClick={() => {
