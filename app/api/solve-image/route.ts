@@ -5,27 +5,39 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+const transcribeInstructions = `
+You transcribe school math from a photo. You do not solve.
+
+Work silently first:
+1. Scan left to right, symbol by symbol.
+2. Count the written digits, letters, and operators.
+3. Output only the transcribed problem.
+
+Handwritten algebra rules:
+- A digit immediately followed by a letter is one term with implicit multiplication: 4x means 4 times x.
+- Never split that into extra terms. 4x is NOT 4 + x and NOT 4 + 2x.
+- A handwritten x is usually two crossing strokes or a cursive loop. That whole pair of strokes is ONE variable x.
+- Do not read those two strokes as a plus sign, a times sign, or an extra digit such as 2.
+- A plus or minus is a separate mark BETWEEN terms, with space around it, not the crossing of an x.
+- Do not invent extra digits, extra operators, extra letters, or extra products.
+- Preserve every number, variable, operator, exponent, fraction, and parenthesis that is actually written.
+- In algebra, a letter next to a number is usually the variable x. Treat a crossing-stroke letter as x, not c, unless it is clearly a c.
+
+Typical linear equations look like: ax ± b = c
+Example: handwritten "4x - 7 = 21" must be transcribed as 4x - 7 = 21
+Wrong: 4 + 2x - 7 = 21
+Wrong: 4 + x - 7 = 21
+Wrong: 42x - 7 = 21
+
+Return ONLY the math transcription on one line. No labels, no quotes, no explanation.
+`;
+
 const teacherInstructions = `
 You are EasyMath AI, an expert and friendly mathematics teacher.
 
 The student uploaded a photo of a handwritten or printed math problem.
-
-Work in this order, silently first:
-1. Inspect the photo carefully.
-2. Internally transcribe the math using the MOST LIKELY mathematical reading.
-3. Then solve that transcription.
-
-How to read handwriting:
-- Prefer the interpretation that makes a normal school math problem.
-- In algebra, a letter next to a number is usually a variable, most often x.
-- A handwritten x is often two crossing strokes or a cursive loop. Treat that as x, not c, unless it is clearly a c.
-- Preserve numbers, variables, operators, exponents, fractions, and parentheses accurately.
-- Do not invent extra letters or products such as 2*x*c.
-
-Ambiguity policy:
-- If the intended symbol is reasonably clear, choose it confidently and do NOT mention other possible letters.
-- Do NOT discuss alternatives like c, 2c, or 2*x*c when the equation is clearly 2x + 5 = 15.
-- Only mention uncertainty if the handwriting is genuinely too unclear AND choosing the wrong symbol would change the problem.
+You will be given the exact transcription of that photo. Solve that transcription exactly.
+Do not change numbers, variables, or operators. Do not re-interpret the handwriting.
 
 For EVERY math question, follow this structure exactly:
 
@@ -181,6 +193,28 @@ function getOutputText(response: {
   return parts.join("\n").trim();
 }
 
+function extractTranscription(text: string): string {
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (const line of lines) {
+    const labeled = line.match(
+      /^(?:transcription|equation|problem|math)\s*[:\-]\s*(.+)$/i
+    );
+    const candidate = (labeled?.[1] ?? line)
+      .replace(/^["'`]+|["'`]+$/g, "")
+      .trim();
+
+    if (/[0-9=]/.test(candidate) && /[a-zA-Z+\-*/^=()]/.test(candidate)) {
+      return candidate;
+    }
+  }
+
+  return lines[0] ?? "";
+}
+
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
@@ -224,16 +258,16 @@ export async function POST(request: Request) {
 
     const imageDataUrl = `data:${prepared.mimeType};base64,${prepared.imageBuffer.toString("base64")}`;
 
-    const response = await openai.responses.create({
+    const transcriptionResponse = await openai.responses.create({
       model: "gpt-5-mini",
-      instructions: teacherInstructions,
+      instructions: transcribeInstructions,
       input: [
         {
           role: "user",
           content: [
             {
               type: "input_text",
-              text: "Read this math photo, choose the most likely transcription, and solve it. For a clear algebra problem, be confident. Do not mention other possible letters unless the handwriting is genuinely too unclear. Put the transcription only as the first step-by-step line, in the form: 1. Read from photo: ...",
+              text: "Transcribe the handwritten or printed math in this photo. Read symbol by symbol. If you see a number touching a handwritten x, write them as one term such as 4x, not 4 + 2x. Return only the math.",
             },
             {
               type: "input_image",
@@ -243,6 +277,23 @@ export async function POST(request: Request) {
           ],
         },
       ],
+    });
+
+    const transcription = extractTranscription(
+      getOutputText(transcriptionResponse)
+    );
+
+    if (!transcription) {
+      return NextResponse.json(
+        { error: "Unable to read the math in this photo." },
+        { status: 500 }
+      );
+    }
+
+    const response = await openai.responses.create({
+      model: "gpt-5-mini",
+      instructions: teacherInstructions,
+      input: `Solve this exact transcription from the photo. Do not change it.\n\n${transcription}\n\nPut the transcription only as the first step-by-step line, in the form: 1. Read from photo: ${transcription}`,
     });
 
     const solution = getOutputText(response);
