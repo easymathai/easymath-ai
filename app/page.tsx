@@ -72,6 +72,9 @@ export default function Home() {
   const [practiceFeedback, setPracticeFeedback] = useState("");
   const [practiceHint, setPracticeHint] = useState("");
   const [practiceCorrect, setPracticeCorrect] = useState<boolean | null>(null);
+  const [practiceWrongAttempts, setPracticeWrongAttempts] = useState(0);
+  const [practiceRevealing, setPracticeRevealing] = useState(false);
+  const [practiceRevealedSolution, setPracticeRevealedSolution] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const latestSolutionRef = useRef(solution);
@@ -116,6 +119,9 @@ export default function Home() {
     setPracticeFeedback("");
     setPracticeHint("");
     setPracticeCorrect(null);
+    setPracticeWrongAttempts(0);
+    setPracticeRevealing(false);
+    setPracticeRevealedSolution("");
   }, [solution]);
 
   function saveHistory(items: HistoryItem[]) {
@@ -297,6 +303,10 @@ export default function Home() {
       return;
     }
 
+    if (practiceRevealing) {
+      return;
+    }
+
     setPracticeChecking(true);
     setPracticeFeedback("");
     setPracticeHint("");
@@ -332,17 +342,25 @@ export default function Home() {
         return;
       }
 
-      setPracticeCorrect(Boolean(data.correct));
+      const isCorrect = Boolean(data.correct);
+
+      setPracticeCorrect(isCorrect);
       setPracticeFeedback(
         typeof data.feedback === "string"
           ? data.feedback
-          : data.correct
+          : isCorrect
             ? "Yes — that's right."
             : "Not quite."
       );
       setPracticeHint(
-        data.correct ? "" : typeof data.hint === "string" ? data.hint : ""
+        isCorrect ? "" : typeof data.hint === "string" ? data.hint : ""
       );
+
+      if (isCorrect) {
+        setPracticeWrongAttempts(0);
+      } else {
+        setPracticeWrongAttempts((count) => count + 1);
+      }
     } catch {
       if (latestSolutionRef.current !== solutionWhenChecked) {
         return;
@@ -358,6 +376,90 @@ export default function Home() {
         setPracticeChecking(false);
       }
     }
+  }
+
+  function formatPracticeSolution(raw: string): string {
+    const parsed = parseSolution(raw);
+    const finalAnswer = parsed["FINAL ANSWER"]
+      ? parsed["FINAL ANSWER"].replace(/Great job![\s\S]*$/, "").trim()
+      : "";
+    const steps = parsed["STEP-BY-STEP EXPLANATION"]
+      ? parsed["STEP-BY-STEP EXPLANATION"]
+          .replace(/Great job![\s\S]*$/, "")
+          .trim()
+      : "";
+
+    if (finalAnswer && steps) {
+      return `Final answer:\n${finalAnswer}\n\nStep-by-step:\n${steps}`;
+    }
+
+    return raw.trim();
+  }
+
+  async function showPracticeSolution() {
+    if (!practiceQuestion.trim() || practiceRevealing || practiceChecking) {
+      return;
+    }
+
+    setPracticeRevealing(true);
+
+    const solutionWhenRevealed = solution;
+
+    try {
+      const response = await fetch("/api/solve", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          question: practiceQuestion,
+          level: studentLevel,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (latestSolutionRef.current !== solutionWhenRevealed) {
+        return;
+      }
+
+      if (!response.ok) {
+        setPracticeFeedback(
+          data.error || "Unable to show the solution. Please try again."
+        );
+        return;
+      }
+
+      const raw = data.solution || "";
+
+      if (!raw.trim()) {
+        setPracticeFeedback("Unable to show the solution. Please try again.");
+        return;
+      }
+
+      setPracticeRevealedSolution(formatPracticeSolution(raw));
+    } catch {
+      if (latestSolutionRef.current !== solutionWhenRevealed) {
+        return;
+      }
+
+      setPracticeFeedback("Unable to show the solution. Please try again.");
+    } finally {
+      if (latestSolutionRef.current === solutionWhenRevealed) {
+        setPracticeRevealing(false);
+      }
+    }
+  }
+
+  function resetPracticeState() {
+    setPracticeAnswer("");
+    setPracticeChecking(false);
+    setPracticeFeedback("");
+    setPracticeHint("");
+    setPracticeCorrect(null);
+    setPracticeWrongAttempts(0);
+    setPracticeRevealing(false);
+    setPracticeRevealedSolution("");
   }
 
   function removeImage() {
@@ -1263,7 +1365,7 @@ export default function Home() {
                           }
                         }}
                         placeholder="Type your answer"
-                        disabled={practiceChecking}
+                        disabled={practiceChecking || practiceRevealing}
                         style={{
                           width: "100%",
                           marginTop: "16px",
@@ -1283,7 +1385,7 @@ export default function Home() {
                       <button
                         type="button"
                         onClick={checkPracticeAnswer}
-                        disabled={practiceChecking}
+                        disabled={practiceChecking || practiceRevealing}
                         style={{
                           marginTop: "12px",
                           border: "none",
@@ -1346,8 +1448,55 @@ export default function Home() {
                         </div>
                       )}
 
+                      {practiceWrongAttempts >= 2 &&
+                        !practiceRevealedSolution && (
+                          <button
+                            type="button"
+                            onClick={showPracticeSolution}
+                            disabled={practiceRevealing || practiceChecking}
+                            style={{
+                              marginTop: "12px",
+                              border: "none",
+                              background: practiceRevealing
+                                ? "#a78bfa"
+                                : "#6d28d9",
+                              color: "white",
+                              padding: "11px 17px",
+                              borderRadius: "11px",
+                              fontWeight: 800,
+                              cursor:
+                                practiceRevealing || practiceChecking
+                                  ? "wait"
+                                  : "pointer",
+                            }}
+                          >
+                            {practiceRevealing
+                              ? "Loading solution..."
+                              : "Show Solution"}
+                          </button>
+                        )}
+
+                      {practiceRevealedSolution && (
+                        <div
+                          style={{
+                            marginTop: "14px",
+                            padding: "14px 16px",
+                            borderRadius: "12px",
+                            background: darkMode ? "#1e1b4b" : "#ffffff",
+                            border: "1px solid #8b5cf6",
+                            fontWeight: 600,
+                            lineHeight: 1.7,
+                            whiteSpace: "pre-wrap",
+                          }}
+                        >
+                          {practiceRevealedSolution}
+                        </div>
+                      )}
+
                       <button
                         onClick={() => {
+                          resetPracticeState();
+
                           setQuestion(
                             practiceQuestion
                           );
