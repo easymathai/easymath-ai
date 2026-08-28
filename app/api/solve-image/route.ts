@@ -5,6 +5,59 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+const STUDENT_LEVELS = ["primary", "middle", "high", "advanced"] as const;
+
+type StudentLevel = (typeof STUDENT_LEVELS)[number];
+
+function parseStudentLevel(value: unknown): StudentLevel {
+  if (typeof value === "string" && STUDENT_LEVELS.includes(value as StudentLevel)) {
+    return value as StudentLevel;
+  }
+
+  return "middle";
+}
+
+function getLevelStyleInstructions(level: StudentLevel): string {
+  const styles: Record<StudentLevel, string> = {
+    primary: `
+Student level: Primary.
+Use very simple language and short sentences.
+Explain arithmetic clearly, one small step at a time.
+Avoid unnecessary mathematical terminology.
+Practice questions should use friendly numbers and only a few small steps.
+`,
+    middle: `
+Student level: Middle School.
+Give clear explanations.
+Introduce normal mathematical terminology.
+Explain why each operation is done.
+Practice questions should match typical middle-school difficulty for the same topic.
+`,
+    high: `
+Student level: High School.
+Use proper algebraic and mathematical terminology.
+Keep steps concise but educational.
+Name methods where useful.
+Practice questions should match high-school difficulty for the same topic.
+`,
+    advanced: `
+Student level: Advanced.
+Be mathematically precise and efficient.
+Avoid over-explaining elementary arithmetic.
+Stay readable and student-friendly.
+Practice questions should stay on the same topic and can be a little more demanding, still school math.
+`,
+  };
+
+  return `
+Explanation style for this student:
+${styles[level]}
+Keep the mathematical FINAL ANSWER the same at every student level.
+Only change explanation tone, wording, depth, and practice-question difficulty.
+Do not change the transcribed numbers, algebra, or the correct result.
+`;
+}
+
 const transcribeInstructions = `
 You transcribe school math from a photo. You do not solve.
 
@@ -66,8 +119,15 @@ Mention one common mistake students should avoid.
 
 PRACTICE QUESTION
 
-Give one similar practice question.
+Give ONE new practice question that:
+- tests the SAME mathematical concept/topic as the transcribed problem
+- uses different numbers or values
+- does NOT repeat the transcribed question
+- is approximately appropriate for the selected Student Level
+- has a valid expected answer
+
 Do NOT solve the practice question.
+Do NOT include the answer.
 
 Use simple English that children and teenagers can understand.
 
@@ -222,6 +282,7 @@ export async function POST(request: Request) {
     const formData = await request.formData();
 
     const file = formData.get("image");
+    const level = parseStudentLevel(formData.get("level"));
 
     if (!(file instanceof File)) {
       return NextResponse.json(
@@ -292,7 +353,9 @@ export async function POST(request: Request) {
 
     const response = await openai.responses.create({
       model: "gpt-5-mini",
-      instructions: teacherInstructions,
+      instructions: `${teacherInstructions}
+${getLevelStyleInstructions(level)}
+`,
       input: `Solve this exact transcription from the photo. Do not change it.\n\n${transcription}\n\nPut the transcription only as the first step-by-step line, in the form: 1. Read from photo: ${transcription}`,
     });
 

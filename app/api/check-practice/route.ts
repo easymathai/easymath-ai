@@ -20,12 +20,12 @@ function parseStudentLevel(value: unknown): StudentLevel {
 function getLevelStyleInstructions(level: StudentLevel): string {
   const styles: Record<StudentLevel, string> = {
     primary:
-      "Use very simple everyday words and short sentences, as if talking to a young child.",
+      "Primary: very simple language, short sentences, explain arithmetic clearly, avoid unnecessary mathematical terminology.",
     middle:
-      "Use friendly EasyMath wording that children and teenagers can follow.",
-    high: "Use proper school terminology. Stay concise and student-friendly.",
+      "Middle School: clear explanations, introduce normal mathematical terminology, explain why each operation is done.",
+    high: "High School: proper algebraic/mathematical terminology, concise but educational.",
     advanced:
-      "Be concise and a little more formal, but still readable and student-friendly.",
+      "Advanced: mathematically precise and efficient. Avoid over-explaining elementary arithmetic.",
   };
 
   return styles[level];

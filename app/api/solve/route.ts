@@ -32,27 +32,31 @@ function getLevelStyleInstructions(level: StudentLevel): string {
   const styles: Record<StudentLevel, string> = {
     primary: `
 Student level: Primary.
-Write for a young child.
-Use very simple everyday words and short sentences.
-Break the working into small concrete steps.
-Avoid formal method names unless a very plain phrase is needed.
+Use very simple language and short sentences.
+Explain arithmetic clearly, one small step at a time.
+Avoid unnecessary mathematical terminology.
+Practice questions should use friendly numbers and only a few small steps.
 `,
     middle: `
 Student level: Middle School.
-Use the current EasyMath teaching style: friendly, clear numbered steps, and simple English for children and teenagers.
+Give clear explanations.
+Introduce normal mathematical terminology.
+Explain why each operation is done.
+Practice questions should match typical middle-school difficulty for the same topic.
 `,
     high: `
 Student level: High School.
-Use proper school terminology.
-Keep the working slightly more concise.
-Name the method where it is useful (for example, inverse operations, expanding brackets, or substituting).
-Stay student-friendly, not academic.
+Use proper algebraic and mathematical terminology.
+Keep steps concise but educational.
+Name methods where useful.
+Practice questions should match high-school difficulty for the same topic.
 `,
     advanced: `
 Student level: Advanced.
-Be concise and a little more formal.
-Show efficient working without skipping a needed check.
-Stay readable and student-friendly. Do not write a university lecture.
+Be mathematically precise and efficient.
+Avoid over-explaining elementary arithmetic.
+Stay readable and student-friendly.
+Practice questions should stay on the same topic and can be a little more demanding, still school math.
 `,
   };
 
@@ -60,8 +64,8 @@ Stay readable and student-friendly. Do not write a university lecture.
 Explanation style for this student:
 ${styles[level]}
 Keep the mathematical FINAL ANSWER the same at every student level.
-Only change explanation tone, wording, and depth.
-Do not change numbers, algebra, or the correct result.
+Only change explanation tone, wording, depth, and practice-question difficulty.
+Do not change numbers, algebra, or the correct result of the original problem.
 `;
 }
 
@@ -113,8 +117,15 @@ Mention one common mistake students should avoid.
 
 PRACTICE QUESTION
 
-Give one similar practice question.
+Give ONE new practice question that:
+- tests the SAME mathematical concept/topic as the solved problem
+- uses different numbers or values
+- does NOT repeat the original question
+- is approximately appropriate for the selected Student Level
+- has a valid expected answer
+
 Do NOT solve the practice question.
+Do NOT include the answer.
 
 Use simple English that children and teenagers can understand.
 
@@ -232,6 +243,7 @@ async function checkSolution(
         instructions: `${checkerInstructions}
 ${getLevelStyleInstructions(level)}
 If you must output a corrected solution after ERROR, write that correction at this student level. Do not rewrite a mathematically correct solution.
+The PRACTICE QUESTION in a correction must test the same concept with different numbers, must not repeat the original question, and must not include the answer.
 `,
         input: `Student question:\n${question}\n\nDraft EasyMath solution to check:\n${originalSolution}`,
       },

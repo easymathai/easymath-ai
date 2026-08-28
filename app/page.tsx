@@ -54,6 +54,18 @@ function parseSolution(text: string) {
   return result;
 }
 
+function getSourceMathQuestion(question: string, solution: string): string {
+  const steps = parseSolution(solution)["STEP-BY-STEP EXPLANATION"] || "";
+  const match =
+    steps.match(/Read from photo:\s*(.+)/i);
+
+  if (match?.[1]) {
+    return match[1].trim().split("\n")[0].trim();
+  }
+
+  return question.trim();
+}
+
 export default function Home() {
   const [question, setQuestion] = useState("");
   const [solution, setSolution] = useState("");
@@ -75,9 +87,12 @@ export default function Home() {
   const [practiceWrongAttempts, setPracticeWrongAttempts] = useState(0);
   const [practiceRevealing, setPracticeRevealing] = useState(false);
   const [practiceRevealedSolution, setPracticeRevealedSolution] = useState("");
+  const [activePracticeQuestion, setActivePracticeQuestion] = useState("");
+  const [practiceGenerating, setPracticeGenerating] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const latestSolutionRef = useRef(solution);
+  const latestPracticeQuestionRef = useRef("");
   latestSolutionRef.current = solution;
 
   const examples = [
@@ -122,6 +137,8 @@ export default function Home() {
     setPracticeWrongAttempts(0);
     setPracticeRevealing(false);
     setPracticeRevealedSolution("");
+    setActivePracticeQuestion("");
+    setPracticeGenerating(false);
   }, [solution]);
 
   function saveHistory(items: HistoryItem[]) {
@@ -150,6 +167,10 @@ export default function Home() {
 
     if (!finalQuestion.trim()) {
       setMessage("Please enter a math question.");
+      return;
+    }
+
+    if (loading || imageLoading) {
       return;
     }
 
@@ -245,6 +266,10 @@ export default function Home() {
       return;
     }
 
+    if (imageLoading || loading) {
+      return;
+    }
+
     setImageLoading(true);
     setSolution("");
     setMessage("");
@@ -253,6 +278,7 @@ export default function Home() {
     try {
       const formData = new FormData();
       formData.append("image", imageFile);
+      formData.append("level", studentLevel);
 
       const response = await fetch("/api/solve-image", {
         method: "POST",
@@ -296,6 +322,10 @@ export default function Home() {
       return;
     }
 
+    if (practiceGenerating || practiceRevealing) {
+      return;
+    }
+
     if (!practiceAnswer.trim()) {
       setPracticeCorrect(null);
       setPracticeHint("");
@@ -313,6 +343,7 @@ export default function Home() {
     setPracticeCorrect(null);
 
     const solutionWhenChecked = solution;
+    const practiceWhenChecked = practiceQuestion;
 
     try {
       const response = await fetch("/api/check-practice", {
@@ -329,7 +360,10 @@ export default function Home() {
 
       const data = await response.json();
 
-      if (latestSolutionRef.current !== solutionWhenChecked) {
+      if (
+        latestSolutionRef.current !== solutionWhenChecked ||
+        latestPracticeQuestionRef.current !== practiceWhenChecked
+      ) {
         return;
       }
 
@@ -362,7 +396,10 @@ export default function Home() {
         setPracticeWrongAttempts((count) => count + 1);
       }
     } catch {
-      if (latestSolutionRef.current !== solutionWhenChecked) {
+      if (
+        latestSolutionRef.current !== solutionWhenChecked ||
+        latestPracticeQuestionRef.current !== practiceWhenChecked
+      ) {
         return;
       }
 
@@ -372,7 +409,10 @@ export default function Home() {
         "Unable to check that answer. Please try again."
       );
     } finally {
-      if (latestSolutionRef.current === solutionWhenChecked) {
+      if (
+        latestSolutionRef.current === solutionWhenChecked &&
+        latestPracticeQuestionRef.current === practiceWhenChecked
+      ) {
         setPracticeChecking(false);
       }
     }
@@ -397,13 +437,19 @@ export default function Home() {
   }
 
   async function showPracticeSolution() {
-    if (!practiceQuestion.trim() || practiceRevealing || practiceChecking) {
+    if (
+      !practiceQuestion.trim() ||
+      practiceRevealing ||
+      practiceChecking ||
+      practiceGenerating
+    ) {
       return;
     }
 
     setPracticeRevealing(true);
 
     const solutionWhenRevealed = solution;
+    const practiceWhenRevealed = practiceQuestion;
 
     try {
       const response = await fetch("/api/solve", {
@@ -419,7 +465,10 @@ export default function Home() {
 
       const data = await response.json();
 
-      if (latestSolutionRef.current !== solutionWhenRevealed) {
+      if (
+        latestSolutionRef.current !== solutionWhenRevealed ||
+        latestPracticeQuestionRef.current !== practiceWhenRevealed
+      ) {
         return;
       }
 
@@ -439,14 +488,108 @@ export default function Home() {
 
       setPracticeRevealedSolution(formatPracticeSolution(raw));
     } catch {
-      if (latestSolutionRef.current !== solutionWhenRevealed) {
+      if (
+        latestSolutionRef.current !== solutionWhenRevealed ||
+        latestPracticeQuestionRef.current !== practiceWhenRevealed
+      ) {
         return;
       }
 
       setPracticeFeedback("Unable to show the solution. Please try again.");
     } finally {
-      if (latestSolutionRef.current === solutionWhenRevealed) {
+      if (
+        latestSolutionRef.current === solutionWhenRevealed &&
+        latestPracticeQuestionRef.current === practiceWhenRevealed
+      ) {
         setPracticeRevealing(false);
+      }
+    }
+  }
+
+  async function createRelatedPracticeQuestion() {
+    if (
+      practiceGenerating ||
+      practiceChecking ||
+      practiceRevealing ||
+      loading ||
+      imageLoading
+    ) {
+      return;
+    }
+
+    const sourceQuestion = getSourceMathQuestion(question, solution);
+    const currentPractice = practiceQuestion;
+
+    if (!sourceQuestion && !currentPractice) {
+      return;
+    }
+
+    setPracticeGenerating(true);
+
+    const solutionWhenGenerated = solution;
+    const practiceWhenGenerated = currentPractice;
+
+    try {
+      const response = await fetch("/api/generate-practice", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          originalQuestion: sourceQuestion || currentPractice,
+          previousPracticeQuestion: currentPractice,
+          level: studentLevel,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (
+        latestSolutionRef.current !== solutionWhenGenerated ||
+        latestPracticeQuestionRef.current !== practiceWhenGenerated
+      ) {
+        return;
+      }
+
+      if (!response.ok) {
+        setPracticeCorrect(null);
+        setPracticeHint("");
+        setPracticeFeedback(
+          data.error || "Unable to create a new question. Please try again."
+        );
+        return;
+      }
+
+      const nextQuestion =
+        typeof data.practiceQuestion === "string"
+          ? data.practiceQuestion.trim()
+          : "";
+
+      if (!nextQuestion) {
+        setPracticeCorrect(null);
+        setPracticeHint("");
+        setPracticeFeedback("Unable to create a new question. Please try again.");
+        return;
+      }
+
+      resetPracticeState();
+      setActivePracticeQuestion(nextQuestion);
+    } catch {
+      if (
+        latestSolutionRef.current !== solutionWhenGenerated ||
+        latestPracticeQuestionRef.current !== practiceWhenGenerated
+      ) {
+        return;
+      }
+
+      setPracticeCorrect(null);
+      setPracticeHint("");
+      setPracticeFeedback(
+        "Unable to create a new question. Please try again."
+      );
+    } finally {
+      if (latestSolutionRef.current === solutionWhenGenerated) {
+        setPracticeGenerating(false);
       }
     }
   }
@@ -489,11 +632,16 @@ export default function Home() {
 
   const parts = solution ? parseSolution(solution) : {};
 
-  const practiceQuestion = parts["PRACTICE QUESTION"]
+  const parsedPracticeQuestion = parts["PRACTICE QUESTION"]
     ? parts["PRACTICE QUESTION"]
         .replace(/Great job![\s\S]*$/, "")
         .trim()
     : "";
+
+  const practiceQuestion =
+    activePracticeQuestion.trim() || parsedPracticeQuestion;
+
+  latestPracticeQuestionRef.current = practiceQuestion;
 
   const theme = useMemo(
     () => ({
@@ -797,7 +945,9 @@ export default function Home() {
                   !e.shiftKey
                 ) {
                   e.preventDefault();
-                  solveQuestion();
+                  if (!loading && !imageLoading) {
+                    solveQuestion();
+                  }
                 }
               }}
               placeholder="Example: Solve x + 8 = 31"
@@ -946,7 +1096,7 @@ export default function Home() {
                   >
                     <button
                       onClick={solveImage}
-                      disabled={imageLoading}
+                      disabled={imageLoading || loading}
                       style={{
                         border: "none",
 
@@ -963,7 +1113,7 @@ export default function Home() {
                       }}
                     >
                       {imageLoading
-                        ? "🤖 Reading Photo..."
+                        ? "Solving..."
                         : "✨ Solve Photo"}
                     </button>
 
@@ -1038,7 +1188,7 @@ export default function Home() {
                 }}
               >
                 {loading
-                  ? "🤖 EasyMath AI is thinking..."
+                  ? "Solving..."
                   : "✨ Solve Now"}
               </button>
 
@@ -1361,11 +1511,21 @@ export default function Home() {
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
                             e.preventDefault();
-                            checkPracticeAnswer();
+                            if (
+                              !practiceChecking &&
+                              !practiceRevealing &&
+                              !practiceGenerating
+                            ) {
+                              checkPracticeAnswer();
+                            }
                           }
                         }}
                         placeholder="Type your answer"
-                        disabled={practiceChecking || practiceRevealing}
+                        disabled={
+                          practiceChecking ||
+                          practiceRevealing ||
+                          practiceGenerating
+                        }
                         style={{
                           width: "100%",
                           marginTop: "16px",
@@ -1385,7 +1545,11 @@ export default function Home() {
                       <button
                         type="button"
                         onClick={checkPracticeAnswer}
-                        disabled={practiceChecking || practiceRevealing}
+                        disabled={
+                          practiceChecking ||
+                          practiceRevealing ||
+                          practiceGenerating
+                        }
                         style={{
                           marginTop: "12px",
                           border: "none",
@@ -1453,7 +1617,11 @@ export default function Home() {
                           <button
                             type="button"
                             onClick={showPracticeSolution}
-                            disabled={practiceRevealing || practiceChecking}
+                            disabled={
+                              practiceRevealing ||
+                              practiceChecking ||
+                              practiceGenerating
+                            }
                             style={{
                               marginTop: "12px",
                               border: "none",
@@ -1471,7 +1639,7 @@ export default function Home() {
                             }}
                           >
                             {practiceRevealing
-                              ? "Loading solution..."
+                              ? "Solving..."
                               : "Show Solution"}
                           </button>
                         )}
@@ -1494,28 +1662,24 @@ export default function Home() {
                       )}
 
                       <button
-                        onClick={() => {
-                          resetPracticeState();
-
-                          setQuestion(
-                            practiceQuestion
-                          );
-
-                          setSolution("");
-
-                          window.scrollTo({
-                            top: 0,
-                            behavior:
-                              "smooth",
-                          });
-                        }}
+                        type="button"
+                        onClick={createRelatedPracticeQuestion}
+                        disabled={
+                          practiceGenerating ||
+                          practiceChecking ||
+                          practiceRevealing ||
+                          loading ||
+                          imageLoading
+                        }
                         style={{
                           marginTop: "16px",
 
                           border: "none",
 
                           background:
-                            "#7c3aed",
+                            practiceGenerating
+                              ? "#a78bfa"
+                              : "#7c3aed",
 
                           color: "white",
 
@@ -1526,10 +1690,15 @@ export default function Home() {
                             "11px",
 
                           fontWeight: 800,
-                          cursor: "pointer",
+                          cursor:
+                            practiceGenerating
+                              ? "wait"
+                              : "pointer",
                         }}
                       >
-                        Try This Question →
+                        {practiceGenerating
+                          ? "Creating question..."
+                          : "Try This Question →"}
                       </button>
                     </div>
                   )}
