@@ -370,6 +370,7 @@ ${getLevelStyleInstructions(level)}
 
     return NextResponse.json({
       solution,
+      transcription,
     });
   } catch (error) {
     console.error("solve-image error:", error);
