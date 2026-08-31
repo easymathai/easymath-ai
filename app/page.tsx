@@ -648,45 +648,90 @@ export default function Home() {
       page: darkMode ? "#0f172a" : "#f8fafc",
 
       panel: darkMode
-        ? "rgba(15,23,42,0.92)"
-        : "rgba(255,255,255,0.96)",
+        ? "rgba(15,23,42,0.94)"
+        : "rgba(255,255,255,0.92)",
 
       panelSoft: darkMode ? "#111827" : "#ffffff",
 
-      text: darkMode ? "#e5e7eb" : "#172033",
+      text: darkMode ? "#e5e7eb" : "#0f172a",
 
       muted: darkMode ? "#94a3b8" : "#64748b",
 
       border: darkMode ? "#334155" : "#e2e8f0",
 
-      input: darkMode ? "#111827" : "#fbfdff",
+      input: darkMode ? "#0b1220" : "#f8fafc",
 
       buttonSoft: darkMode ? "#1e293b" : "#ffffff",
 
       shadow: darkMode
-        ? "0 20px 55px rgba(0,0,0,0.25)"
-        : "0 20px 55px rgba(15,23,42,0.08)",
+        ? "0 18px 50px rgba(0,0,0,0.28)"
+        : "0 18px 50px rgba(15,23,42,0.08)",
+
+      shadowSoft: darkMode
+        ? "0 8px 24px rgba(0,0,0,0.18)"
+        : "0 8px 24px rgba(15,23,42,0.05)",
     }),
     [darkMode]
   );
 
   return (
     <main
+      className="easymath-app"
       style={{
         minHeight: "100vh",
 
         background: darkMode
-          ? "radial-gradient(circle at top left, #1e3a8a 0%, transparent 30%), radial-gradient(circle at bottom right, #14532d 0%, transparent 30%), #0f172a"
-          : "radial-gradient(circle at top left, #dbeafe 0%, transparent 35%), radial-gradient(circle at bottom right, #dcfce7 0%, transparent 35%), #f8fafc",
+          ? "radial-gradient(circle at top left, #1e3a8a 0%, transparent 28%), radial-gradient(circle at bottom right, #14532d 0%, transparent 28%), #0f172a"
+          : "radial-gradient(circle at top left, #dbeafe 0%, transparent 32%), radial-gradient(circle at bottom right, #dcfce7 0%, transparent 32%), #f8fafc",
 
-        padding: "24px 18px 40px",
+        padding: "22px 16px 36px",
 
         fontFamily:
           "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
 
         color: theme.text,
+        letterSpacing: "-0.011em",
       }}
     >
+      <style>{`
+        .easymath-app, .easymath-app * { box-sizing: border-box; }
+        .easymath-app button,
+        .easymath-app textarea,
+        .easymath-app input {
+          font-family: inherit;
+        }
+        .easymath-app textarea,
+        .easymath-app input {
+          line-height: 1.55;
+        }
+        .easymath-app textarea:focus,
+        .easymath-app input:focus {
+          outline: 2px solid #2563eb;
+          outline-offset: 1px;
+          border-color: #2563eb !important;
+        }
+        .easymath-app button:focus-visible {
+          outline: 2px solid #2563eb;
+          outline-offset: 2px;
+        }
+        .easymath-layout {
+          display: grid;
+          grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.8fr);
+          gap: 22px;
+          align-items: start;
+        }
+        @media (max-width: 900px) {
+          .easymath-layout {
+            grid-template-columns: 1fr;
+          }
+          .easymath-title {
+            font-size: 26px !important;
+          }
+          .easymath-h2 {
+            font-size: 24px !important;
+          }
+        }
+      `}</style>
       <div
         style={{
           maxWidth: "1180px",
@@ -697,10 +742,11 @@ export default function Home() {
           style={{
             background: theme.panel,
             border: `1px solid ${theme.border}`,
-            borderRadius: "24px",
-            padding: "18px 22px",
-            boxShadow: theme.shadow,
-            marginBottom: "22px",
+            borderRadius: "22px",
+            padding: "16px 20px",
+            boxShadow: theme.shadowSoft,
+            marginBottom: "20px",
+            backdropFilter: "blur(16px)",
           }}
         >
           <div
@@ -721,9 +767,9 @@ export default function Home() {
             >
               <div
                 style={{
-                  width: "56px",
-                  height: "56px",
-                  borderRadius: "18px",
+                  width: "52px",
+                  height: "52px",
+                  borderRadius: "16px",
                   display: "grid",
                   placeItems: "center",
 
@@ -731,8 +777,9 @@ export default function Home() {
                     "linear-gradient(135deg, #2563eb, #16a34a)",
 
                   color: "white",
-                  fontSize: "28px",
+                  fontSize: "26px",
                   fontWeight: 900,
+                  boxShadow: "0 8px 18px rgba(37,99,235,0.28)",
                 }}
               >
                 ∑
@@ -740,10 +787,13 @@ export default function Home() {
 
               <div>
                 <h1
+                  className="easymath-title"
                   style={{
                     margin: 0,
-                    fontSize: "32px",
+                    fontSize: "30px",
                     fontWeight: 900,
+                    letterSpacing: "-0.03em",
+                    lineHeight: 1.1,
                   }}
                 >
                   EasyMath AI
@@ -751,9 +801,10 @@ export default function Home() {
 
                 <p
                   style={{
-                    margin: "4px 0 0",
+                    margin: "5px 0 0",
                     color: theme.muted,
                     fontWeight: 600,
+                    fontSize: "14px",
                   }}
                 >
                   Your Personal AI Math Tutor
@@ -770,7 +821,7 @@ export default function Home() {
             >
               <div
                 style={{
-                  padding: "10px 14px",
+                  padding: "8px 13px",
                   borderRadius: "999px",
 
                   background: darkMode
@@ -782,7 +833,9 @@ export default function Home() {
                     : "#1d4ed8",
 
                   fontWeight: 800,
-                  fontSize: "13px",
+                  fontSize: "12px",
+                  letterSpacing: "0.01em",
+                  border: `1px solid ${darkMode ? "#1e3a8a" : "#dbeafe"}`,
                 }}
               >
                 Making Math Easy for Everyone
@@ -793,11 +846,12 @@ export default function Home() {
                 style={{
                   border: `1px solid ${theme.border}`,
                   background: theme.buttonSoft,
-                  width: "46px",
-                  height: "46px",
+                  width: "44px",
+                  height: "44px",
                   borderRadius: "14px",
                   cursor: "pointer",
-                  fontSize: "20px",
+                  fontSize: "18px",
+                  boxShadow: theme.shadowSoft,
                 }}
               >
                 {darkMode ? "☀️" : "🌙"}
@@ -807,29 +861,22 @@ export default function Home() {
         </header>
 
         <div
-          style={{
-            display: "grid",
-
-            gridTemplateColumns:
-              "minmax(0,1.7fr) minmax(280px,0.8fr)",
-
-            gap: "22px",
-            alignItems: "start",
-          }}
+          className="easymath-layout"
         >
           <section
             style={{
               background: theme.panel,
               border: `1px solid ${theme.border}`,
-              borderRadius: "26px",
-              padding: "30px",
+              borderRadius: "24px",
+              padding: "26px 24px",
               boxShadow: theme.shadow,
+              backdropFilter: "blur(16px)",
             }}
           >
             <div
               style={{
                 display: "inline-flex",
-                padding: "8px 12px",
+                padding: "7px 12px",
                 borderRadius: "999px",
 
                 background: darkMode
@@ -841,16 +888,22 @@ export default function Home() {
                   : "#2563eb",
 
                 fontWeight: 900,
-                fontSize: "12px",
+                fontSize: "11px",
+                letterSpacing: "0.08em",
+                border: `1px solid ${darkMode ? "#1e3a8a" : "#dbeafe"}`,
               }}
             >
               ✨ ASK EASYMATH
             </div>
 
             <h2
+              className="easymath-h2"
               style={{
-                margin: "14px 0 8px",
-                fontSize: "31px",
+                margin: "16px 0 8px",
+                fontSize: "30px",
+                fontWeight: 900,
+                letterSpacing: "-0.03em",
+                lineHeight: 1.15,
               }}
             >
               What math problem can I help you solve?
@@ -868,14 +921,21 @@ export default function Home() {
 
             <div
               style={{
-                marginTop: "18px",
+                marginTop: "20px",
+                padding: "16px",
+                borderRadius: "18px",
+                border: `1px solid ${theme.border}`,
+                background: darkMode ? "#0b1220" : "#f8fafc",
               }}
             >
               <div
                 style={{
                   fontWeight: 900,
-                  fontSize: "16px",
+                  fontSize: "13px",
                   marginBottom: "6px",
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  color: theme.muted,
                 }}
               >
                 Student Level
@@ -885,7 +945,8 @@ export default function Home() {
                 style={{
                   color: theme.muted,
                   fontSize: "14px",
-                  marginBottom: "12px",
+                  marginBottom: "14px",
+                  lineHeight: 1.5,
                 }}
               >
                 Same correct answer. Clearer explanation for your level.
@@ -894,7 +955,7 @@ export default function Home() {
               <div
                 style={{
                   display: "flex",
-                  gap: "10px",
+                  gap: "8px",
                   flexWrap: "wrap",
                 }}
               >
@@ -912,18 +973,20 @@ export default function Home() {
                           : `1px solid ${theme.border}`,
                         background: selected
                           ? darkMode
-                            ? "#172554"
-                            : "#eef4ff"
+                            ? "linear-gradient(135deg,#1d4ed8,#2563eb)"
+                            : "linear-gradient(135deg,#2563eb,#1d4ed8)"
                           : theme.buttonSoft,
                         color: selected
-                          ? darkMode
-                            ? "#bfdbfe"
-                            : "#2563eb"
+                          ? "#ffffff"
                           : theme.text,
-                        padding: "10px 14px",
-                        borderRadius: "12px",
+                        padding: "9px 14px",
+                        borderRadius: "999px",
                         fontWeight: 800,
+                        fontSize: "13px",
                         cursor: "pointer",
+                        boxShadow: selected
+                          ? "0 8px 16px rgba(37,99,235,0.25)"
+                          : "none",
                       }}
                     >
                       {level.label}
@@ -955,13 +1018,17 @@ export default function Home() {
                 width: "100%",
                 minHeight: "150px",
                 marginTop: "20px",
-                padding: "18px",
+                padding: "16px 18px",
                 boxSizing: "border-box",
-                borderRadius: "17px",
+                borderRadius: "16px",
                 border: `1px solid ${theme.border}`,
                 background: theme.input,
                 color: theme.text,
-                fontSize: "18px",
+                fontSize: "17px",
+                resize: "vertical",
+                boxShadow: darkMode
+                  ? "inset 0 1px 0 rgba(255,255,255,0.03)"
+                  : "inset 0 1px 2px rgba(15,23,42,0.04)",
               }}
             />
 
@@ -989,10 +1056,11 @@ export default function Home() {
 
                     color: theme.text,
 
-                    padding: "10px 14px",
-                    borderRadius: "12px",
+                    padding: "8px 13px",
+                    borderRadius: "999px",
 
                     fontWeight: 700,
+                    fontSize: "13px",
                     cursor: "pointer",
                   }}
                 >
@@ -1006,23 +1074,22 @@ export default function Home() {
                 marginTop: "22px",
                 padding: "18px",
 
-                border: `1px dashed ${
-                  darkMode
-                    ? "#475569"
-                    : "#94a3b8"
-                }`,
+                border: `1px solid ${theme.border}`,
 
-                borderRadius: "17px",
+                borderRadius: "18px",
                 background: darkMode
-                  ? "#111827"
+                  ? "#0b1220"
                   : "#f8fafc",
               }}
             >
               <div
                 style={{
                   fontWeight: 900,
-                  fontSize: "16px",
+                  fontSize: "13px",
                   marginBottom: "6px",
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  color: theme.muted,
                 }}
               >
                 📷 Photo Solver
@@ -1062,7 +1129,7 @@ export default function Home() {
 
                     color: theme.text,
 
-                    padding: "12px 17px",
+                    padding: "11px 16px",
                     borderRadius: "12px",
                     cursor: "pointer",
                     fontWeight: 800,
@@ -1110,6 +1177,7 @@ export default function Home() {
 
                         fontWeight: 900,
                         cursor: "pointer",
+                        boxShadow: "0 8px 18px rgba(22,163,74,0.28)",
                       }}
                     >
                       {imageLoading
@@ -1160,6 +1228,7 @@ export default function Home() {
                 display: "flex",
                 gap: "12px",
                 marginTop: "22px",
+                flexWrap: "wrap",
               }}
             >
               <button
@@ -1177,14 +1246,15 @@ export default function Home() {
 
                   color: "white",
 
-                  padding: "15px 26px",
+                  padding: "14px 24px",
 
                   borderRadius: "14px",
 
                   fontWeight: 900,
-                  fontSize: "16px",
+                  fontSize: "15px",
 
                   cursor: "pointer",
+                  boxShadow: "0 10px 22px rgba(37,99,235,0.28)",
                 }}
               >
                 {loading
@@ -1218,9 +1288,10 @@ export default function Home() {
               <div
                 style={{
                   marginTop: "22px",
-                  padding: "16px",
+                  padding: "14px 16px",
 
                   borderRadius: "14px",
+                  border: `1px solid ${darkMode ? "#1e3a8a" : "#bfdbfe"}`,
 
                   background: darkMode
                     ? "#172554"
@@ -1240,7 +1311,7 @@ export default function Home() {
                   style={{
                     marginTop: "28px",
                     display: "grid",
-                    gap: "16px",
+                    gap: "14px",
                   }}
                 >
                   <div
@@ -1249,6 +1320,8 @@ export default function Home() {
                       justifyContent:
                         "space-between",
                       gap: "15px",
+                      alignItems: "flex-start",
+                      flexWrap: "wrap",
                     }}
                   >
                     <div>
@@ -1256,7 +1329,8 @@ export default function Home() {
                         style={{
                           color: "#2563eb",
                           fontWeight: 900,
-                          fontSize: "12px",
+                          fontSize: "11px",
+                          letterSpacing: "0.08em",
                         }}
                       >
                         EASYMATH AI SOLUTION
@@ -1264,8 +1338,10 @@ export default function Home() {
 
                       <div
                         style={{
-                          marginTop: "5px",
+                          marginTop: "6px",
                           fontWeight: 800,
+                          fontSize: "16px",
+                          lineHeight: 1.4,
                         }}
                       >
                         {question}
@@ -1286,8 +1362,8 @@ export default function Home() {
 
                         color: theme.text,
 
-                        borderRadius: "11px",
-                        padding: "10px 14px",
+                        borderRadius: "12px",
+                        padding: "9px 14px",
 
                         fontWeight: 800,
                         cursor: "pointer",
@@ -1300,7 +1376,7 @@ export default function Home() {
                   {parts["FINAL ANSWER"] && (
                     <div
                       style={{
-                        padding: "22px",
+                        padding: "20px 22px",
 
                         borderRadius: "18px",
 
@@ -1310,11 +1386,14 @@ export default function Home() {
 
                         border:
                           "1px solid #22c55e",
+                        boxShadow: theme.shadowSoft,
                       }}
                     >
                       <div
                         style={{
                           fontWeight: 900,
+                          fontSize: "12px",
+                          letterSpacing: "0.06em",
                           color: darkMode
                             ? "#86efac"
                             : "#15803d",
@@ -1325,9 +1404,11 @@ export default function Home() {
 
                       <div
                         style={{
-                          fontSize: "26px",
+                          fontSize: "28px",
                           fontWeight: 900,
                           marginTop: "10px",
+                          letterSpacing: "-0.03em",
+                          lineHeight: 1.25,
                         }}
                       >
                         {
@@ -1344,7 +1425,7 @@ export default function Home() {
                   ] && (
                     <div
                       style={{
-                        padding: "22px",
+                        padding: "20px 22px",
                         borderRadius: "18px",
 
                         background: darkMode
@@ -1353,6 +1434,7 @@ export default function Home() {
 
                         border:
                           "1px solid #3b82f6",
+                        boxShadow: theme.shadowSoft,
                       }}
                     >
                       <strong>
@@ -1381,7 +1463,7 @@ export default function Home() {
                   {parts["WHY IT WORKS"] && (
                     <div
                       style={{
-                        padding: "22px",
+                        padding: "20px 22px",
                         borderRadius: "18px",
 
                         background: darkMode
@@ -1390,6 +1472,7 @@ export default function Home() {
 
                         border:
                           "1px solid #f59e0b",
+                        boxShadow: theme.shadowSoft,
                       }}
                     >
                       <strong>
@@ -1420,7 +1503,7 @@ export default function Home() {
                   ] && (
                     <div
                       style={{
-                        padding: "22px",
+                        padding: "20px 22px",
                         borderRadius: "18px",
 
                         background: darkMode
@@ -1429,6 +1512,7 @@ export default function Home() {
 
                         border:
                           "1px solid #fb7185",
+                        boxShadow: theme.shadowSoft,
                       }}
                     >
                       <strong>
@@ -1461,7 +1545,7 @@ export default function Home() {
                     !practiceQuestion && (
                       <div
                         style={{
-                          padding: "22px",
+                          padding: "20px 22px",
                           borderRadius: "18px",
                           background: darkMode
                             ? "#172554"
@@ -1469,6 +1553,7 @@ export default function Home() {
                           border: "1px solid #3b82f6",
                           whiteSpace: "pre-wrap",
                           lineHeight: 1.85,
+                          boxShadow: theme.shadowSoft,
                         }}
                       >
                         {solution}
@@ -1478,7 +1563,7 @@ export default function Home() {
                   {practiceQuestion && (
                     <div
                       style={{
-                        padding: "22px",
+                        padding: "20px 22px",
                         borderRadius: "18px",
 
                         background: darkMode
@@ -1487,6 +1572,7 @@ export default function Home() {
 
                         border:
                           "1px solid #8b5cf6",
+                        boxShadow: theme.shadowSoft,
                       }}
                     >
                       <strong>
@@ -1529,9 +1615,9 @@ export default function Home() {
                         style={{
                           width: "100%",
                           marginTop: "16px",
-                          padding: "14px 16px",
+                          padding: "13px 16px",
                           boxSizing: "border-box",
-                          borderRadius: "12px",
+                          borderRadius: "14px",
                           border: `1px solid ${
                             darkMode ? "#6d28d9" : "#c4b5fd"
                           }`,
@@ -1555,10 +1641,10 @@ export default function Home() {
                           border: "none",
                           background: practiceChecking
                             ? "#a78bfa"
-                            : "#7c3aed",
+                            : "linear-gradient(135deg,#7c3aed,#6d28d9)",
                           color: "white",
                           padding: "11px 17px",
-                          borderRadius: "11px",
+                          borderRadius: "12px",
                           fontWeight: 800,
                           cursor: practiceChecking
                             ? "wait"
@@ -1712,11 +1798,12 @@ export default function Home() {
 
               border: `1px solid ${theme.border}`,
 
-              borderRadius: "26px",
+              borderRadius: "24px",
 
-              padding: "23px",
+              padding: "22px",
 
               boxShadow: theme.shadow,
+              backdropFilter: "blur(16px)",
             }}
           >
             <div
@@ -1727,6 +1814,9 @@ export default function Home() {
                   "space-between",
 
                 alignItems: "center",
+                gap: "12px",
+                flexWrap: "wrap",
+                marginBottom: "14px",
               }}
             >
               <div>
@@ -1734,15 +1824,23 @@ export default function Home() {
                   style={{
                     color: "#16a34a",
 
-                    fontSize: "12px",
+                    fontSize: "11px",
 
                     fontWeight: 900,
+                    letterSpacing: "0.08em",
                   }}
                 >
                   YOUR WORK
                 </div>
 
-                <h3>
+                <h3
+                  style={{
+                    margin: "6px 0 0",
+                    fontSize: "22px",
+                    fontWeight: 900,
+                    letterSpacing: "-0.02em",
+                  }}
+                >
                   Recent Questions
                 </h3>
               </div>
@@ -1792,11 +1890,11 @@ export default function Home() {
 
                       textAlign: "left",
 
-                      padding: "14px",
+                      padding: "13px 14px",
 
                       border: `1px solid ${theme.border}`,
 
-                      borderRadius: "13px",
+                      borderRadius: "14px",
 
                       background:
                         theme.buttonSoft,
@@ -1804,6 +1902,8 @@ export default function Home() {
                       color: theme.text,
 
                       fontWeight: 700,
+                      fontSize: "14px",
+                      lineHeight: 1.4,
 
                       cursor: "pointer",
                     }}
@@ -1818,9 +1918,10 @@ export default function Home() {
               style={{
                 marginTop: "20px",
 
-                padding: "18px",
+                padding: "16px 18px",
 
-                borderRadius: "17px",
+                borderRadius: "16px",
+                border: `1px solid ${darkMode ? "#1e3a8a" : "#dbeafe"}`,
 
                 background: darkMode
                   ? "linear-gradient(135deg,#172554,#14532d)"
