@@ -1,5 +1,10 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
+import {
+  enforceLoggedInSolverLimit,
+  releaseSolverReservation,
+  type SolverGateSuccess,
+} from "@/lib/solver-gate";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -317,61 +322,82 @@ export async function POST(request: Request) {
       );
     }
 
-    const imageDataUrl = `data:${prepared.mimeType};base64,${prepared.imageBuffer.toString("base64")}`;
+    const enforced = await enforceLoggedInSolverLimit(request);
 
-    const transcriptionResponse = await openai.responses.create({
-      model: "gpt-5-mini",
-      instructions: transcribeInstructions,
-      input: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "input_text",
-              text: "Transcribe the handwritten or printed math in this photo. Read symbol by symbol. If you see a number touching a handwritten x, write them as one term such as 4x, not 4 + 2x. Return only the math.",
-            },
-            {
-              type: "input_image",
-              image_url: imageDataUrl,
-              detail: "high",
-            },
-          ],
-        },
-      ],
-    });
-
-    const transcription = extractTranscription(
-      getOutputText(transcriptionResponse)
-    );
-
-    if (!transcription) {
-      return NextResponse.json(
-        { error: "Unable to read the math in this photo." },
-        { status: 500 }
-      );
+    if (!enforced.ok) {
+      return enforced.response;
     }
 
-    const response = await openai.responses.create({
-      model: "gpt-5-mini",
-      instructions: `${teacherInstructions}
+    const gate: SolverGateSuccess = enforced;
+
+    try {
+      const imageDataUrl = `data:${prepared.mimeType};base64,${prepared.imageBuffer.toString("base64")}`;
+
+      const transcriptionResponse = await openai.responses.create({
+        model: "gpt-5-mini",
+        instructions: transcribeInstructions,
+        input: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: "Transcribe the handwritten or printed math in this photo. Read symbol by symbol. If you see a number touching a handwritten x, write them as one term such as 4x, not 4 + 2x. Return only the math.",
+              },
+              {
+                type: "input_image",
+                image_url: imageDataUrl,
+                detail: "high",
+              },
+            ],
+          },
+        ],
+      });
+
+      const transcription = extractTranscription(
+        getOutputText(transcriptionResponse)
+      );
+
+      if (!transcription) {
+        await releaseSolverReservation(gate);
+        return NextResponse.json(
+          { error: "Unable to read the math in this photo." },
+          { status: 500 }
+        );
+      }
+
+      const response = await openai.responses.create({
+        model: "gpt-5-mini",
+        instructions: `${teacherInstructions}
 ${getLevelStyleInstructions(level)}
 `,
-      input: `Solve this exact transcription from the photo. Do not change it.\n\n${transcription}\n\nPut the transcription only as the first step-by-step line, in the form: 1. Read from photo: ${transcription}`,
-    });
+        input: `Solve this exact transcription from the photo. Do not change it.\n\n${transcription}\n\nPut the transcription only as the first step-by-step line, in the form: 1. Read from photo: ${transcription}`,
+      });
 
-    const solution = getOutputText(response);
+      const solution = getOutputText(response);
 
-    if (!solution) {
+      if (!solution || !solution.trim()) {
+        await releaseSolverReservation(gate);
+        return NextResponse.json(
+          { error: "No solution returned." },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        solution,
+        transcription,
+        usage: gate.usage,
+      });
+    } catch (error) {
+      await releaseSolverReservation(gate);
+      console.error("solve-image error:", error);
+
       return NextResponse.json(
-        { error: "No solution returned." },
+        { error: "Unable to read image." },
         { status: 500 }
       );
     }
-
-    return NextResponse.json({
-      solution,
-      transcription,
-    });
   } catch (error) {
     console.error("solve-image error:", error);
 

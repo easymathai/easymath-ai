@@ -1,5 +1,10 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
+import {
+  enforceLoggedInSolverLimit,
+  releaseSolverReservation,
+  type SolverGateSuccess,
+} from "@/lib/solver-gate";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -275,6 +280,8 @@ export async function POST(request: Request) {
     const body = await request.json();
     const question = body.question;
     const level = parseStudentLevel(body.level);
+    // Practice "Show Solution" must not consume Free plan solver credits.
+    const countsTowardDailyLimit = body.usageMode !== "practice";
 
     if (!question || typeof question !== "string") {
       return NextResponse.json(
@@ -283,23 +290,61 @@ export async function POST(request: Request) {
       );
     }
 
-    const response = await openai.responses.create({
-      model: "gpt-5-mini",
-      instructions: `${teacherInstructions}
+    let gate: SolverGateSuccess | null = null;
+
+    if (countsTowardDailyLimit) {
+      const enforced = await enforceLoggedInSolverLimit(request);
+
+      if (!enforced.ok) {
+        return enforced.response;
+      }
+
+      gate = enforced;
+    }
+
+    try {
+      const response = await openai.responses.create({
+        model: "gpt-5-mini",
+        instructions: `${teacherInstructions}
 ${getLevelStyleInstructions(level)}
 `,
-      input: question,
-    });
+        input: question,
+      });
 
-    const originalSolution = getOutputText(response) || response.output_text || "";
+      const originalSolution =
+        getOutputText(response) || response.output_text || "";
 
-    const solution = originalSolution
-      ? await checkSolution(question, originalSolution, level)
-      : originalSolution;
+      const solution = originalSolution
+        ? await checkSolution(question, originalSolution, level)
+        : originalSolution;
 
-    return NextResponse.json({
-      solution,
-    });
+      if (!solution || !String(solution).trim()) {
+        if (gate) {
+          await releaseSolverReservation(gate);
+        }
+
+        return NextResponse.json(
+          { error: "Unable to solve the question right now." },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        solution,
+        usage: gate?.usage ?? null,
+      });
+    } catch (error) {
+      if (gate) {
+        await releaseSolverReservation(gate);
+      }
+
+      console.error("EasyMath AI API error:", error);
+
+      return NextResponse.json(
+        { error: "Unable to solve the question right now." },
+        { status: 500 }
+      );
+    }
   } catch (error) {
     console.error("EasyMath AI API error:", error);
 

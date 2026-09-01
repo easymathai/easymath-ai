@@ -1,6 +1,23 @@
 "use client";
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  authHeaders,
+  cloudAccountsAvailable,
+  getAccessToken,
+  readAuthState,
+} from "@/lib/client-auth";
+import {
+  DAILY_LIMIT_MESSAGE,
+  FREE_DAILY_SOLVER_LIMIT,
+  FREE_PLAN_NAME,
+} from "@/lib/constants";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  canUseLocalSolver,
+  consumeLocalSolver,
+  getLocalUsageSnapshot,
+} from "@/lib/usage-local";
 
 type HistoryItem = {
   question: string;
@@ -102,6 +119,7 @@ function studentFriendlyError(message: unknown, fallback: string): string {
       "We couldn't read the math in this photo. Try a clearer picture.",
     "Something went wrong.":
       "Something went wrong. Please try again.",
+    [DAILY_LIMIT_MESSAGE]: DAILY_LIMIT_MESSAGE,
   };
 
   return known[message] || message;
@@ -186,12 +204,46 @@ export default function Home() {
   const [detectedProblem, setDetectedProblem] = useState("");
   const [stats, setStats] = useState<StudentStats>(emptyStats);
   const [hasMounted, setHasMounted] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [signedIn, setSignedIn] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+  const [dailyUsed, setDailyUsed] = useState(0);
+  const [dailyLimit, setDailyLimit] = useState(FREE_DAILY_SOLVER_LIMIT);
+  const [cloudEnabled] = useState(() => cloudAccountsAvailable());
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const latestSolutionRef = useRef(solution);
   const latestPracticeQuestionRef = useRef("");
   const practiceRequestRef = useRef(0);
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cloudReadyRef = useRef(false);
+  const statsRef = useRef(stats);
+  const levelRef = useRef(studentLevel);
+  const topicRef = useRef(practiceTopic);
+  const practiceSyncRef = useRef({
+    topic: practiceTopic,
+    index: practiceIndex,
+    score: practiceScore,
+    set: practiceSet,
+    completed: practiceCompleted,
+  });
   latestSolutionRef.current = solution;
+  statsRef.current = stats;
+  levelRef.current = studentLevel;
+  topicRef.current = practiceTopic;
+  practiceSyncRef.current = {
+    topic: practiceTopic,
+    index: practiceIndex,
+    score: practiceScore,
+    set: practiceSet,
+    completed: practiceCompleted,
+  };
 
   const examples = [
     "25 + 15",
@@ -248,7 +300,103 @@ export default function Home() {
         setStats(emptyStats());
       }
     }
+
+    const localUsage = getLocalUsageSnapshot();
+    setDailyUsed(localUsage.used);
+    setDailyLimit(localUsage.limit);
   }, []);
+
+  useEffect(() => {
+    if (!cloudEnabled) {
+      return;
+    }
+
+    const supabase = getSupabaseBrowserClient();
+
+    if (!supabase) {
+      return;
+    }
+
+    let active = true;
+
+    async function hydrateAuth() {
+      const state = await readAuthState();
+
+      if (!active) {
+        return;
+      }
+
+      if (state.user?.email) {
+        setSignedIn(true);
+        setUserEmail(state.user.email);
+        await loadCloudProfileAndUsage();
+      } else {
+        setSignedIn(false);
+        setUserEmail(null);
+        cloudReadyRef.current = false;
+        const localUsage = getLocalUsageSnapshot();
+        setDailyUsed(localUsage.used);
+        setDailyLimit(localUsage.limit);
+      }
+    }
+
+    void hydrateAuth();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) {
+        return;
+      }
+
+      if (session?.user?.email) {
+        setSignedIn(true);
+        setUserEmail(session.user.email);
+        void loadCloudProfileAndUsage();
+      } else {
+        setSignedIn(false);
+        setUserEmail(null);
+        cloudReadyRef.current = false;
+        const localUsage = getLocalUsageSnapshot();
+        setDailyUsed(localUsage.used);
+        setDailyLimit(localUsage.limit);
+      }
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, [cloudEnabled]);
+
+  useEffect(() => {
+    if (!signedIn || !cloudReadyRef.current) {
+      return;
+    }
+
+    if (syncTimerRef.current) {
+      clearTimeout(syncTimerRef.current);
+    }
+
+    syncTimerRef.current = setTimeout(() => {
+      void pushCloudProgress();
+    }, 700);
+
+    return () => {
+      if (syncTimerRef.current) {
+        clearTimeout(syncTimerRef.current);
+      }
+    };
+  }, [
+    signedIn,
+    stats,
+    studentLevel,
+    practiceTopic,
+    practiceIndex,
+    practiceScore,
+    practiceSet,
+    practiceCompleted,
+  ]);
 
   useEffect(() => {
     practiceRequestRef.current += 1;
@@ -331,6 +479,268 @@ export default function Home() {
     });
   }
 
+  async function loadCloudProfileAndUsage() {
+    const token = await getAccessToken();
+
+    if (!token) {
+      return;
+    }
+
+    try {
+      const [progressRes, usageRes] = await Promise.all([
+        fetch("/api/progress", {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch("/api/usage", {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
+
+      if (progressRes.ok) {
+        const data = await progressRes.json();
+        const progress = data.progress;
+
+        if (progress) {
+          const cloudEmpty =
+            Number(progress.questionsSolved) === 0 &&
+            Number(progress.practiceAttempted) === 0 &&
+            (!Array.isArray(progress.activity) || progress.activity.length === 0);
+
+          const local = statsRef.current;
+          const localHasData =
+            local.questionsSolved > 0 ||
+            local.practiceAttempted > 0 ||
+            local.activity.length > 0;
+
+          if (cloudEmpty && localHasData) {
+            cloudReadyRef.current = true;
+            await pushCloudProgress();
+          } else {
+            if (isStudentLevel(progress.studentLevel)) {
+              setStudentLevel(progress.studentLevel);
+              localStorage.setItem("easymath-level", progress.studentLevel);
+            }
+
+            if (isPracticeTopic(progress.practiceTopic)) {
+              setPracticeTopic(progress.practiceTopic);
+              try {
+                localStorage.setItem("easymath-topic", progress.practiceTopic);
+              } catch {
+                // ignore
+              }
+            }
+
+            const nextStats: StudentStats = {
+              questionsSolved: Number(progress.questionsSolved) || 0,
+              practiceAttempted: Number(progress.practiceAttempted) || 0,
+              practiceCorrect: Number(progress.practiceCorrect) || 0,
+              activity: Array.isArray(progress.activity)
+                ? progress.activity.slice(0, 8)
+                : [],
+            };
+
+            setStats(nextStats);
+
+            try {
+              localStorage.setItem("easymath-stats", JSON.stringify(nextStats));
+            } catch {
+              // ignore
+            }
+
+            const pp = progress.practiceProgress || {};
+
+            if (Array.isArray(pp.set) && pp.set.length > 0) {
+              setPracticeSet(
+                pp.set.filter((item: unknown): item is string => typeof item === "string")
+              );
+              setPracticeIndex(Number(pp.index) || 0);
+              setPracticeScore(Number(pp.score) || 0);
+              setPracticeCompleted(Boolean(pp.completed));
+            }
+          }
+        }
+
+        if (typeof data.email === "string" && data.email) {
+          setUserEmail(data.email);
+        }
+      }
+
+      if (usageRes.ok) {
+        const usage = await usageRes.json();
+        setDailyUsed(Number(usage.used) || 0);
+        setDailyLimit(Number(usage.limit) || FREE_DAILY_SOLVER_LIMIT);
+      }
+
+      cloudReadyRef.current = true;
+    } catch (error) {
+      console.error("loadCloudProfileAndUsage error:", error);
+      cloudReadyRef.current = true;
+    }
+  }
+
+  async function pushCloudProgress() {
+    const token = await getAccessToken();
+
+    if (!token || !cloudReadyRef.current) {
+      return;
+    }
+
+    const practice = practiceSyncRef.current;
+
+    try {
+      await fetch("/api/progress", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          studentLevel: levelRef.current,
+          practiceTopic: topicRef.current,
+          questionsSolved: statsRef.current.questionsSolved,
+          practiceAttempted: statsRef.current.practiceAttempted,
+          practiceCorrect: statsRef.current.practiceCorrect,
+          activity: statsRef.current.activity,
+          practiceProgress: {
+            topic: practice.topic,
+            index: practice.index,
+            score: practice.score,
+            set: practice.set,
+            completed: practice.completed,
+          },
+        }),
+      });
+    } catch (error) {
+      console.error("pushCloudProgress error:", error);
+    }
+  }
+
+  async function handleAuthSubmit() {
+    if (!cloudEnabled) {
+      setAuthMessage(
+        "Cloud accounts are not set up yet. Add your Supabase environment variables to enable sign up and login."
+      );
+      return;
+    }
+
+    const supabase = getSupabaseBrowserClient();
+
+    if (!supabase) {
+      setAuthMessage(
+        "Cloud accounts are not set up yet. Add your Supabase environment variables first."
+      );
+      return;
+    }
+
+    const email = authEmail.trim();
+    const password = authPassword;
+
+    if (!email || !password) {
+      setAuthMessage("Please enter your email and password.");
+      return;
+    }
+
+    if (password.length < 6) {
+      setAuthMessage("Please use a password with at least 6 characters.");
+      return;
+    }
+
+    setAuthBusy(true);
+    setAuthMessage("");
+
+    try {
+      if (authMode === "signup") {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+
+        if (error) {
+          setAuthMessage(error.message);
+          return;
+        }
+
+        if (data.session) {
+          setAuthModalOpen(false);
+          setAuthPassword("");
+          setAuthMessage("");
+          setAccountOpen(true);
+        } else {
+          setAuthMessage(
+            "Account created. Check your email to confirm your address if confirmation is enabled, then log in."
+          );
+          setAuthMode("login");
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) {
+          setAuthMessage(error.message);
+          return;
+        }
+
+        setAuthModalOpen(false);
+        setAuthPassword("");
+        setAuthMessage("");
+        setAccountOpen(true);
+      }
+    } catch {
+      setAuthMessage("Unable to reach the account service. Please try again.");
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function handleLogout() {
+    const supabase = getSupabaseBrowserClient();
+
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
+
+    setSignedIn(false);
+    setUserEmail(null);
+    setAccountOpen(false);
+    cloudReadyRef.current = false;
+
+    const localUsage = getLocalUsageSnapshot();
+    setDailyUsed(localUsage.used);
+    setDailyLimit(localUsage.limit);
+  }
+
+  function applyUsageFromResponse(data: {
+    usage?: { used?: number; limit?: number } | null;
+  }) {
+    if (data.usage && typeof data.usage.used === "number") {
+      setDailyUsed(data.usage.used);
+      setDailyLimit(Number(data.usage.limit) || FREE_DAILY_SOLVER_LIMIT);
+    }
+  }
+
+  function guardSolverQuota(): boolean {
+    if (signedIn) {
+      if (dailyUsed >= dailyLimit) {
+        setMessage(DAILY_LIMIT_MESSAGE);
+        return false;
+      }
+
+      return true;
+    }
+
+    if (!canUseLocalSolver()) {
+      setMessage(DAILY_LIMIT_MESSAGE);
+      const snap = getLocalUsageSnapshot();
+      setDailyUsed(snap.used);
+      setDailyLimit(snap.limit);
+      return false;
+    }
+
+    return true;
+  }
+
   async function solveQuestion(customQuestion?: string) {
     const finalQuestion = customQuestion ?? question;
 
@@ -343,6 +753,10 @@ export default function Home() {
       return;
     }
 
+    if (!guardSolverQuota()) {
+      return;
+    }
+
     setQuestion(finalQuestion);
     setLoading(true);
     setSolution("");
@@ -350,11 +764,13 @@ export default function Home() {
     setDetectedProblem("");
 
     try {
+      const headers = await authHeaders({
+        "Content-Type": "application/json",
+      });
+
       const response = await fetch("/api/solve", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify({
           question: finalQuestion,
           level: studentLevel,
@@ -364,6 +780,19 @@ export default function Home() {
       const data = await response.json();
 
       if (!response.ok) {
+        if (response.status === 429) {
+          setMessage(
+            studentFriendlyError(data.error, DAILY_LIMIT_MESSAGE)
+          );
+          if (data.usage) {
+            applyUsageFromResponse(data);
+          } else {
+            setDailyUsed(dailyLimit);
+          }
+          setSolution("");
+          return;
+        }
+
         setSolution(
           studentFriendlyError(
             data.error,
@@ -371,6 +800,14 @@ export default function Home() {
           )
         );
         return;
+      }
+
+      if (signedIn) {
+        applyUsageFromResponse(data);
+      } else {
+        const consumed = consumeLocalSolver();
+        setDailyUsed(consumed.used);
+        setDailyLimit(consumed.limit);
       }
 
       const result = data.solution || "No solution returned.";
@@ -450,6 +887,10 @@ export default function Home() {
       return;
     }
 
+    if (!guardSolverQuota()) {
+      return;
+    }
+
     setImageLoading(true);
     setSolution("");
     setMessage("");
@@ -461,14 +902,30 @@ export default function Home() {
       formData.append("image", imageFile);
       formData.append("level", studentLevel);
 
+      const headers = await authHeaders();
+
       const response = await fetch("/api/solve-image", {
         method: "POST",
+        headers,
         body: formData,
       });
 
       const data = await response.json();
 
       if (!response.ok) {
+        if (response.status === 429) {
+          setMessage(
+            studentFriendlyError(data.error, DAILY_LIMIT_MESSAGE)
+          );
+          if (data.usage) {
+            applyUsageFromResponse(data);
+          } else {
+            setDailyUsed(dailyLimit);
+          }
+          setSolution("");
+          return;
+        }
+
         setSolution(
           studentFriendlyError(
             data.error,
@@ -476,6 +933,14 @@ export default function Home() {
           )
         );
         return;
+      }
+
+      if (signedIn) {
+        applyUsageFromResponse(data);
+      } else {
+        const consumed = consumeLocalSolver();
+        setDailyUsed(consumed.used);
+        setDailyLimit(consumed.limit);
       }
 
       const result =
@@ -676,14 +1141,17 @@ export default function Home() {
     const practiceWhenRevealed = practiceQuestion;
 
     try {
+      const headers = await authHeaders({
+        "Content-Type": "application/json",
+      });
+
       const response = await fetch("/api/solve", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify({
           question: practiceQuestion,
           level: studentLevel,
+          usageMode: "practice",
         }),
       });
 
@@ -1104,6 +1572,8 @@ export default function Home() {
       ? `Question ${practiceIndex + 1} of ${PRACTICE_SET_SIZE}`
       : "No practice in progress";
 
+  const solverLimitReached = dailyUsed >= dailyLimit;
+
   useEffect(() => {
     if (!parsedPracticeQuestion || practiceCompleted) {
       return;
@@ -1219,8 +1689,8 @@ export default function Home() {
           flex-shrink: 0;
         }
         .easymath-app button:disabled {
-          cursor: wait;
-          opacity: 0.72;
+          cursor: not-allowed;
+          opacity: 0.5;
         }
       `}</style>
       <div
@@ -1308,29 +1778,67 @@ export default function Home() {
                 display: "flex",
                 gap: "10px",
                 alignItems: "center",
+                flexWrap: "wrap",
               }}
             >
               <div
                 style={{
                   padding: "8px 13px",
                   borderRadius: "999px",
-
-                  background: darkMode
-                    ? "#172554"
-                    : "#eff6ff",
-
-                  color: darkMode
-                    ? "#bfdbfe"
-                    : "#1d4ed8",
-
+                  background: darkMode ? "#14532d" : "#ecfdf5",
+                  color: darkMode ? "#86efac" : "#15803d",
                   fontWeight: 800,
                   fontSize: "12px",
-                  letterSpacing: "0.01em",
-                  border: `1px solid ${darkMode ? "#1e3a8a" : "#dbeafe"}`,
+                  border: `1px solid ${darkMode ? "#166534" : "#bbf7d0"}`,
                 }}
               >
-                Making Math Easy for Everyone
+                {dailyUsed} of {dailyLimit} questions used today
               </div>
+
+              {signedIn ? (
+                <button
+                  type="button"
+                  onClick={() => setAccountOpen(true)}
+                  style={{
+                    border: `1px solid ${theme.border}`,
+                    background: theme.buttonSoft,
+                    color: theme.text,
+                    padding: "9px 14px",
+                    borderRadius: "999px",
+                    fontWeight: 800,
+                    fontSize: "13px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Account
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode("login");
+                    setAuthMessage(
+                      cloudEnabled
+                        ? ""
+                        : "Cloud accounts need Supabase setup. You can still use EasyMath with the Free local limit."
+                    );
+                    setAuthModalOpen(true);
+                  }}
+                  style={{
+                    border: "none",
+                    background: "linear-gradient(135deg,#2563eb,#1d4ed8)",
+                    color: "white",
+                    padding: "9px 14px",
+                    borderRadius: "999px",
+                    fontWeight: 800,
+                    fontSize: "13px",
+                    cursor: "pointer",
+                    boxShadow: "0 8px 16px rgba(37,99,235,0.25)",
+                  }}
+                >
+                  Log in
+                </button>
+              )}
 
               <button
                 onClick={toggleTheme}
@@ -1409,6 +1917,77 @@ export default function Home() {
               Type your question or upload a photo of
               homework, a worksheet, or handwritten math.
             </p>
+
+            <div
+              style={{
+                marginTop: "16px",
+                padding: "14px 16px",
+                borderRadius: "14px",
+                border: `1px solid ${
+                  solverLimitReached
+                    ? darkMode
+                      ? "#9f1239"
+                      : "#fecdd3"
+                    : darkMode
+                      ? "#1e3a8a"
+                      : "#bfdbfe"
+                }`,
+                background: solverLimitReached
+                  ? darkMode
+                    ? "linear-gradient(135deg,#4c0519,#3b0764)"
+                    : "linear-gradient(135deg,#fff1f2,#faf5ff)"
+                  : darkMode
+                    ? "#172554"
+                    : "#eff6ff",
+                fontWeight: 700,
+                fontSize: "14px",
+                lineHeight: 1.55,
+              }}
+            >
+              {solverLimitReached ? (
+                <div>
+                  <div style={{ whiteSpace: "pre-line" }}>
+                    {DAILY_LIMIT_MESSAGE}
+                  </div>
+                  <div
+                    style={{
+                      marginTop: "8px",
+                      fontWeight: 600,
+                      color: theme.muted,
+                      fontSize: "13px",
+                    }}
+                  >
+                    Practice Mode stays available and does not use this limit.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMessage(
+                        "Upgrade is coming soon. For now, come back tomorrow for 10 more Free Plan solver questions."
+                      )
+                    }
+                    style={{
+                      marginTop: "12px",
+                      border: "none",
+                      background: "linear-gradient(135deg,#7c3aed,#6d28d9)",
+                      color: "white",
+                      padding: "10px 16px",
+                      borderRadius: "11px",
+                      fontWeight: 900,
+                      cursor: "pointer",
+                      boxShadow: "0 8px 16px rgba(124,58,237,0.28)",
+                    }}
+                  >
+                    Upgrade
+                  </button>
+                </div>
+              ) : (
+                <>
+                  Free plan: {dailyUsed} of {dailyLimit} solver questions used
+                  today. Practice questions do not use this limit.
+                </>
+              )}
+            </div>
 
             <div
               style={{
@@ -1608,7 +2187,7 @@ export default function Home() {
                   !e.shiftKey
                 ) {
                   e.preventDefault();
-                  if (!loading && !imageLoading) {
+                  if (!loading && !imageLoading && !solverLimitReached) {
                     solveQuestion();
                   }
                 }
@@ -1647,7 +2226,7 @@ export default function Home() {
                     solveQuestion(example)
                   }
                   disabled={
-                    loading || imageLoading
+                    loading || imageLoading || solverLimitReached
                   }
                   style={{
                     border: `1px solid ${theme.border}`,
@@ -1661,7 +2240,7 @@ export default function Home() {
 
                     fontWeight: 700,
                     fontSize: "13px",
-                    cursor: "pointer",
+                    cursor: solverLimitReached ? "not-allowed" : "pointer",
                   }}
                 >
                   {example}
@@ -1721,7 +2300,7 @@ export default function Home() {
                   onClick={() =>
                     fileInputRef.current?.click()
                   }
-                  disabled={loading || imageLoading}
+                  disabled={loading || imageLoading || solverLimitReached}
                   style={{
                     border: `1px solid ${theme.border}`,
 
@@ -1732,7 +2311,7 @@ export default function Home() {
 
                     padding: "11px 16px",
                     borderRadius: "12px",
-                    cursor: "pointer",
+                    cursor: solverLimitReached ? "not-allowed" : "pointer",
                     fontWeight: 800,
                   }}
                 >
@@ -1764,12 +2343,15 @@ export default function Home() {
                   >
                     <button
                       onClick={solveImage}
-                      disabled={imageLoading || loading}
+                      disabled={
+                        imageLoading || loading || solverLimitReached
+                      }
                       style={{
                         border: "none",
 
-                        background:
-                          "linear-gradient(135deg,#16a34a,#15803d)",
+                        background: solverLimitReached
+                          ? "#86efac"
+                          : "linear-gradient(135deg,#16a34a,#15803d)",
 
                         color: "white",
 
@@ -1777,8 +2359,12 @@ export default function Home() {
                         borderRadius: "12px",
 
                         fontWeight: 900,
-                        cursor: "pointer",
-                        boxShadow: "0 8px 18px rgba(22,163,74,0.28)",
+                        cursor: solverLimitReached
+                          ? "not-allowed"
+                          : "pointer",
+                        boxShadow: solverLimitReached
+                          ? "none"
+                          : "0 8px 18px rgba(22,163,74,0.28)",
                       }}
                     >
                       {imageLoading ? (
@@ -1792,6 +2378,8 @@ export default function Home() {
                           <span className="easymath-spinner" aria-hidden="true" />
                           Reading your math...
                         </span>
+                      ) : solverLimitReached ? (
+                        "Daily limit reached"
                       ) : (
                         "✨ Solve Photo"
                       )}
@@ -1829,6 +2417,8 @@ export default function Home() {
                   marginTop: "12px",
                   color: "#f59e0b",
                   fontWeight: 700,
+                  whiteSpace: "pre-line",
+                  lineHeight: 1.5,
                 }}
               >
                 {message}
@@ -1848,13 +2438,14 @@ export default function Home() {
                   solveQuestion()
                 }
                 disabled={
-                  loading || imageLoading
+                  loading || imageLoading || solverLimitReached
                 }
                 style={{
                   border: "none",
 
-                  background:
-                    "linear-gradient(135deg,#2563eb,#1d4ed8)",
+                  background: solverLimitReached
+                    ? "#93c5fd"
+                    : "linear-gradient(135deg,#2563eb,#1d4ed8)",
 
                   color: "white",
 
@@ -1865,8 +2456,12 @@ export default function Home() {
                   fontWeight: 900,
                   fontSize: "15px",
 
-                  cursor: "pointer",
-                  boxShadow: "0 10px 22px rgba(37,99,235,0.28)",
+                  cursor: solverLimitReached
+                    ? "not-allowed"
+                    : "pointer",
+                  boxShadow: solverLimitReached
+                    ? "none"
+                    : "0 10px 22px rgba(37,99,235,0.28)",
                 }}
               >
                 {loading ? (
@@ -1880,6 +2475,8 @@ export default function Home() {
                     <span className="easymath-spinner" aria-hidden="true" />
                     Solving...
                   </span>
+                ) : solverLimitReached ? (
+                  "Daily limit reached"
                 ) : (
                   "✨ Solve Now"
                 )}
@@ -2631,6 +3228,72 @@ export default function Home() {
 
             <div
               style={{
+                marginBottom: "16px",
+                padding: "14px 15px",
+                borderRadius: "16px",
+                border: `1px solid ${theme.border}`,
+                background: darkMode ? "#0b1220" : "#f8fafc",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 900,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  color: theme.muted,
+                }}
+              >
+                Account
+              </div>
+              <div
+                style={{
+                  marginTop: "8px",
+                  fontWeight: 800,
+                  fontSize: "14px",
+                  lineHeight: 1.45,
+                }}
+              >
+                {signedIn && userEmail ? userEmail : "Guest (local progress)"}
+              </div>
+              <div
+                style={{
+                  marginTop: "6px",
+                  color: theme.muted,
+                  fontWeight: 700,
+                  fontSize: "13px",
+                }}
+              >
+                Plan: {FREE_PLAN_NAME} · {dailyUsed}/{dailyLimit} today
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (signedIn) {
+                    setAccountOpen(true);
+                  } else {
+                    setAuthMode("login");
+                    setAuthModalOpen(true);
+                  }
+                }}
+                style={{
+                  marginTop: "12px",
+                  border: "none",
+                  background: "linear-gradient(135deg,#2563eb,#1d4ed8)",
+                  color: "white",
+                  padding: "9px 13px",
+                  borderRadius: "11px",
+                  fontWeight: 800,
+                  fontSize: "13px",
+                  cursor: "pointer",
+                }}
+              >
+                {signedIn ? "Open account" : "Log in / Sign up"}
+              </button>
+            </div>
+
+            <div
+              style={{
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr",
                 gap: "10px",
@@ -2912,6 +3575,321 @@ export default function Home() {
           answer.
         </p>
       </div>
+
+      {authModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 50,
+            background: "rgba(15,23,42,0.55)",
+            display: "grid",
+            placeItems: "center",
+            padding: "18px",
+          }}
+          onClick={() => {
+            if (!authBusy) {
+              setAuthModalOpen(false);
+            }
+          }}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: "420px",
+              background: theme.panelSoft,
+              color: theme.text,
+              border: `1px solid ${theme.border}`,
+              borderRadius: "22px",
+              padding: "22px",
+              boxShadow: theme.shadow,
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 900,
+                fontSize: "22px",
+                letterSpacing: "-0.02em",
+              }}
+            >
+              {authMode === "login" ? "Welcome back" : "Create your account"}
+            </div>
+            <div
+              style={{
+                marginTop: "8px",
+                color: theme.muted,
+                fontWeight: 600,
+                fontSize: "14px",
+                lineHeight: 1.5,
+              }}
+            >
+              Save your progress in the cloud and keep your Free plan usage
+              across devices.
+            </div>
+
+            <label
+              style={{
+                display: "block",
+                marginTop: "18px",
+                fontWeight: 800,
+                fontSize: "13px",
+              }}
+            >
+              Email
+              <input
+                type="email"
+                value={authEmail}
+                onChange={(e) => setAuthEmail(e.target.value)}
+                autoComplete="email"
+                style={{
+                  width: "100%",
+                  marginTop: "8px",
+                  padding: "12px 14px",
+                  borderRadius: "12px",
+                  border: `1px solid ${theme.border}`,
+                  background: theme.input,
+                  color: theme.text,
+                  fontWeight: 600,
+                }}
+              />
+            </label>
+
+            <label
+              style={{
+                display: "block",
+                marginTop: "14px",
+                fontWeight: 800,
+                fontSize: "13px",
+              }}
+            >
+              Password
+              <input
+                type="password"
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+                autoComplete={
+                  authMode === "login" ? "current-password" : "new-password"
+                }
+                style={{
+                  width: "100%",
+                  marginTop: "8px",
+                  padding: "12px 14px",
+                  borderRadius: "12px",
+                  border: `1px solid ${theme.border}`,
+                  background: theme.input,
+                  color: theme.text,
+                  fontWeight: 600,
+                }}
+              />
+            </label>
+
+            {authMessage && (
+              <div
+                style={{
+                  marginTop: "14px",
+                  padding: "12px 13px",
+                  borderRadius: "12px",
+                  background: darkMode ? "#422006" : "#fffbeb",
+                  border: "1px solid #f59e0b",
+                  fontWeight: 700,
+                  fontSize: "13px",
+                  lineHeight: 1.5,
+                }}
+              >
+                {authMessage}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleAuthSubmit}
+              disabled={authBusy}
+              style={{
+                width: "100%",
+                marginTop: "16px",
+                border: "none",
+                background: "linear-gradient(135deg,#2563eb,#1d4ed8)",
+                color: "white",
+                padding: "13px 16px",
+                borderRadius: "12px",
+                fontWeight: 900,
+                cursor: authBusy ? "wait" : "pointer",
+              }}
+            >
+              {authBusy
+                ? "Please wait..."
+                : authMode === "login"
+                  ? "Log in"
+                  : "Sign up"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMode(authMode === "login" ? "signup" : "login");
+                setAuthMessage("");
+              }}
+              style={{
+                width: "100%",
+                marginTop: "10px",
+                border: "none",
+                background: "transparent",
+                color: theme.muted,
+                fontWeight: 800,
+                cursor: "pointer",
+              }}
+            >
+              {authMode === "login"
+                ? "Need an account? Sign up"
+                : "Already have an account? Log in"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {accountOpen && signedIn && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 50,
+            background: "rgba(15,23,42,0.55)",
+            display: "grid",
+            placeItems: "center",
+            padding: "18px",
+          }}
+          onClick={() => setAccountOpen(false)}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: "460px",
+              background: theme.panelSoft,
+              color: theme.text,
+              border: `1px solid ${theme.border}`,
+              borderRadius: "22px",
+              padding: "22px",
+              boxShadow: theme.shadow,
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 900,
+                fontSize: "22px",
+                letterSpacing: "-0.02em",
+              }}
+            >
+              Your account
+            </div>
+
+            <div
+              style={{
+                marginTop: "16px",
+                display: "grid",
+                gap: "10px",
+              }}
+            >
+              {[
+                { label: "Email", value: userEmail || "—" },
+                { label: "Plan", value: FREE_PLAN_NAME },
+                {
+                  label: "Daily usage",
+                  value: `${dailyUsed} of ${dailyLimit} questions used today`,
+                },
+                {
+                  label: "Questions solved",
+                  value: String(stats.questionsSolved),
+                },
+                {
+                  label: "Practice score",
+                  value: `${stats.practiceCorrect}/${stats.practiceAttempted || 0}`,
+                },
+                {
+                  label: "Accuracy",
+                  value:
+                    practiceAccuracy === null ? "—" : `${practiceAccuracy}%`,
+                },
+                { label: "Student level", value: studentLevel },
+                { label: "Practice topic", value: practiceTopic },
+              ].map((row) => (
+                <div
+                  key={row.label}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "12px",
+                    padding: "11px 12px",
+                    borderRadius: "12px",
+                    border: `1px solid ${theme.border}`,
+                    background: darkMode ? "#0b1220" : "#f8fafc",
+                  }}
+                >
+                  <span
+                    style={{
+                      color: theme.muted,
+                      fontWeight: 800,
+                      fontSize: "13px",
+                    }}
+                  >
+                    {row.label}
+                  </span>
+                  <span
+                    style={{
+                      fontWeight: 800,
+                      fontSize: "13px",
+                      textAlign: "right",
+                    }}
+                  >
+                    {row.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              style={{
+                width: "100%",
+                marginTop: "16px",
+                border: "none",
+                background: "linear-gradient(135deg,#dc2626,#b91c1c)",
+                color: "white",
+                padding: "13px 16px",
+                borderRadius: "12px",
+                fontWeight: 900,
+                cursor: "pointer",
+              }}
+            >
+              Log out
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setAccountOpen(false)}
+              style={{
+                width: "100%",
+                marginTop: "10px",
+                border: `1px solid ${theme.border}`,
+                background: theme.buttonSoft,
+                color: theme.text,
+                padding: "12px 16px",
+                borderRadius: "12px",
+                fontWeight: 800,
+                cursor: "pointer",
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
