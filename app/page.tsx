@@ -216,6 +216,7 @@ export default function Home() {
   const [dailyUsed, setDailyUsed] = useState(0);
   const [dailyLimit, setDailyLimit] = useState(FREE_DAILY_SOLVER_LIMIT);
   const [cloudEnabled] = useState(() => cloudAccountsAvailable());
+  const [pricingOpen, setPricingOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const latestSolutionRef = useRef(solution);
@@ -1692,6 +1693,17 @@ export default function Home() {
           cursor: not-allowed;
           opacity: 0.5;
         }
+        .easymath-pricing-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 14px;
+          margin-top: 18px;
+        }
+        @media (max-width: 700px) {
+          .easymath-pricing-grid {
+            grid-template-columns: 1fr;
+          }
+        }
       `}</style>
       <div
         style={{
@@ -1961,11 +1973,7 @@ export default function Home() {
                   </div>
                   <button
                     type="button"
-                    onClick={() =>
-                      setMessage(
-                        "Upgrade is coming soon. For now, come back tomorrow for 10 more Free Plan solver questions."
-                      )
-                    }
+                    onClick={() => setPricingOpen(true)}
                     style={{
                       marginTop: "12px",
                       border: "none",
@@ -3886,6 +3894,297 @@ export default function Home() {
               }}
             >
               Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {pricingOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="EasyMath AI plans"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 50,
+            background: "rgba(15,23,42,0.58)",
+            display: "grid",
+            placeItems: "center",
+            padding: "18px",
+            overflowY: "auto",
+          }}
+          onClick={() => setPricingOpen(false)}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: "760px",
+              margin: "auto",
+              background: theme.panelSoft,
+              color: theme.text,
+              border: `1px solid ${theme.border}`,
+              borderRadius: "24px",
+              padding: "22px",
+              boxShadow: theme.shadow,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                gap: "12px",
+                flexWrap: "wrap",
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    color: "#7c3aed",
+                    fontSize: "11px",
+                    fontWeight: 900,
+                    letterSpacing: "0.08em",
+                  }}
+                >
+                  UPGRADE
+                </div>
+                <div
+                  style={{
+                    marginTop: "6px",
+                    fontWeight: 900,
+                    fontSize: "24px",
+                    letterSpacing: "-0.03em",
+                  }}
+                >
+                  Choose your EasyMath AI plan
+                </div>
+                <div
+                  style={{
+                    marginTop: "8px",
+                    color: theme.muted,
+                    fontWeight: 600,
+                    fontSize: "14px",
+                    lineHeight: 1.55,
+                    maxWidth: "520px",
+                  }}
+                >
+                  Keep practising on Free, or get ready for Pro unlimited solving
+                  when it launches.
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPricingOpen(false)}
+                style={{
+                  border: `1px solid ${theme.border}`,
+                  background: theme.buttonSoft,
+                  color: theme.text,
+                  padding: "10px 14px",
+                  borderRadius: "12px",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                }}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="easymath-pricing-grid">
+              <div
+                style={{
+                  padding: "18px",
+                  borderRadius: "18px",
+                  border: `1px solid ${theme.border}`,
+                  background: darkMode ? "#0b1220" : "#f8fafc",
+                }}
+              >
+                <div
+                  style={{
+                    fontWeight: 900,
+                    fontSize: "12px",
+                    letterSpacing: "0.06em",
+                    color: theme.muted,
+                  }}
+                >
+                  FREE
+                </div>
+                <div
+                  style={{
+                    marginTop: "10px",
+                    fontWeight: 900,
+                    fontSize: "32px",
+                    letterSpacing: "-0.03em",
+                  }}
+                >
+                  AED 0
+                </div>
+                <div
+                  style={{
+                    marginTop: "4px",
+                    color: theme.muted,
+                    fontWeight: 700,
+                    fontSize: "13px",
+                  }}
+                >
+                  Your current plan
+                </div>
+                <ul
+                  style={{
+                    margin: "16px 0 0",
+                    padding: "0 0 0 18px",
+                    display: "grid",
+                    gap: "9px",
+                    fontWeight: 600,
+                    fontSize: "14px",
+                    lineHeight: 1.45,
+                    color: theme.text,
+                  }}
+                >
+                  <li>10 AI solver questions per day</li>
+                  <li>Photo Solver included within the daily solver limit</li>
+                  <li>Practice Mode</li>
+                  <li>Step-by-step explanations</li>
+                  <li>Student level selection</li>
+                  <li>Progress tracking</li>
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => setPricingOpen(false)}
+                  style={{
+                    width: "100%",
+                    marginTop: "18px",
+                    border: `1px solid ${theme.border}`,
+                    background: theme.buttonSoft,
+                    color: theme.text,
+                    padding: "12px 16px",
+                    borderRadius: "12px",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  Continue with Free
+                </button>
+              </div>
+
+              <div
+                style={{
+                  padding: "18px",
+                  borderRadius: "18px",
+                  border: "1px solid #8b5cf6",
+                  background: darkMode
+                    ? "linear-gradient(160deg,#2e1065 0%,#172554 55%,#0b1220 100%)"
+                    : "linear-gradient(160deg,#faf5ff 0%,#eff6ff 55%,#ffffff 100%)",
+                  boxShadow: darkMode
+                    ? "0 16px 36px rgba(124,58,237,0.28)"
+                    : "0 16px 36px rgba(124,58,237,0.16)",
+                  position: "relative",
+                }}
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "14px",
+                    right: "14px",
+                    padding: "5px 10px",
+                    borderRadius: "999px",
+                    background: "linear-gradient(135deg,#7c3aed,#2563eb)",
+                    color: "white",
+                    fontWeight: 900,
+                    fontSize: "11px",
+                    letterSpacing: "0.04em",
+                  }}
+                >
+                  RECOMMENDED
+                </div>
+                <div
+                  style={{
+                    fontWeight: 900,
+                    fontSize: "12px",
+                    letterSpacing: "0.06em",
+                    color: darkMode ? "#c4b5fd" : "#6d28d9",
+                  }}
+                >
+                  PRO
+                </div>
+                <div
+                  style={{
+                    marginTop: "10px",
+                    fontWeight: 900,
+                    fontSize: "32px",
+                    letterSpacing: "-0.03em",
+                  }}
+                >
+                  Coming Soon
+                </div>
+                <div
+                  style={{
+                    marginTop: "4px",
+                    color: theme.muted,
+                    fontWeight: 700,
+                    fontSize: "13px",
+                  }}
+                >
+                  Unlimited solving when Pro launches
+                </div>
+                <ul
+                  style={{
+                    margin: "16px 0 0",
+                    padding: "0 0 0 18px",
+                    display: "grid",
+                    gap: "9px",
+                    fontWeight: 600,
+                    fontSize: "14px",
+                    lineHeight: 1.45,
+                    color: theme.text,
+                  }}
+                >
+                  <li>Unlimited AI solver questions</li>
+                  <li>Unlimited Photo Solver</li>
+                  <li>Practice Mode</li>
+                  <li>Step-by-step explanations</li>
+                  <li>Student level selection</li>
+                  <li>Progress tracking</li>
+                  <li>Priority access to future features</li>
+                </ul>
+                <button
+                  type="button"
+                  disabled
+                  style={{
+                    width: "100%",
+                    marginTop: "18px",
+                    border: "none",
+                    background: "linear-gradient(135deg,#7c3aed,#6d28d9)",
+                    color: "white",
+                    padding: "12px 16px",
+                    borderRadius: "12px",
+                    fontWeight: 900,
+                    cursor: "not-allowed",
+                    opacity: 0.85,
+                  }}
+                >
+                  Coming Soon
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setPricingOpen(false)}
+              style={{
+                width: "100%",
+                marginTop: "16px",
+                border: "none",
+                background: "transparent",
+                color: theme.muted,
+                padding: "10px",
+                fontWeight: 800,
+                cursor: "pointer",
+              }}
+            >
+              ← Back to solver
             </button>
           </div>
         </div>
