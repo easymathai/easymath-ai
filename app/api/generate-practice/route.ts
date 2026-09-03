@@ -1,5 +1,10 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
+import {
+  jsonWithPracticeCookie,
+  PRACTICE_TOKEN_CONFIG_MESSAGE,
+  signPracticeQuestions,
+} from "@/lib/practice-token";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -201,10 +206,25 @@ ${count > 1 ? `Return exactly ${count} questions.` : ""}
       );
     }
 
-    return NextResponse.json({
-      practiceQuestion: unique[0],
-      practiceQuestions: unique.slice(0, count),
-    });
+    const selected = unique.slice(0, count);
+    const issued = await signPracticeQuestions(request, selected);
+
+    if (!issued.ok) {
+      return NextResponse.json(
+        { error: PRACTICE_TOKEN_CONFIG_MESSAGE },
+        { status: 503 }
+      );
+    }
+
+    return jsonWithPracticeCookie(
+      {
+        practiceQuestion: selected[0],
+        practiceToken: issued.tokens[0],
+        practiceQuestions: selected,
+        practiceTokens: issued.tokens,
+      },
+      issued.guestSidToSet
+    );
   } catch (error) {
     console.error("generate-practice error:", error);
 

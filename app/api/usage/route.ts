@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
 import { FREE_DAILY_SOLVER_LIMIT } from "@/lib/constants";
+import {
+  getDailySolverLimitForPlan,
+  getPlanDisplayName,
+} from "@/lib/plans";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { getRequestUser, getSolverUsage } from "@/lib/supabase/server";
+import {
+  getRequestUser,
+  getSolverUsage,
+  getUserPlanFromProfile,
+} from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
   if (!isSupabaseConfigured()) {
@@ -17,6 +25,21 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Please sign in." }, { status: 401 });
   }
 
+  const plan = await getUserPlanFromProfile(auth.supabase, auth.user.id);
+  const planLimit = getDailySolverLimitForPlan(plan);
+  const unlimited = planLimit === null;
+
+  if (unlimited) {
+    return NextResponse.json({
+      plan,
+      planLabel: getPlanDisplayName(plan),
+      unlimited: true,
+      used: 0,
+      limit: null,
+      remaining: null,
+    });
+  }
+
   const usage = await getSolverUsage(auth.supabase);
 
   if (!usage) {
@@ -26,10 +49,14 @@ export async function GET(request: Request) {
     );
   }
 
+  const limit = usage.limit || planLimit || FREE_DAILY_SOLVER_LIMIT;
+
   return NextResponse.json({
+    plan,
+    planLabel: getPlanDisplayName(plan),
+    unlimited: false,
     used: usage.used,
-    limit: usage.limit || FREE_DAILY_SOLVER_LIMIT,
-    remaining: Math.max(0, (usage.limit || FREE_DAILY_SOLVER_LIMIT) - usage.used),
-    plan: "Free",
+    limit,
+    remaining: Math.max(0, limit - usage.used),
   });
 }

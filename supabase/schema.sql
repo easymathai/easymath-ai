@@ -8,6 +8,8 @@
 create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   email text,
+  plan text not null default 'free'
+    check (plan in ('free', 'pro')),
   student_level text not null default 'middle'
     check (student_level in ('primary', 'middle', 'high', 'advanced')),
   practice_topic text not null default 'mixed'
@@ -53,6 +55,41 @@ create policy "profiles_insert_own"
   to authenticated
   with check (auth.uid() = id);
 
+-- Prevent authenticated end-users from self-upgrading plan via client writes.
+-- Privileged SQL Editor / service_role updates can still set plan = 'pro'.
+create or replace function public.protect_profile_plan()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null or auth.role() = 'service_role' then
+    if tg_op = 'INSERT' and new.plan is null then
+      new.plan := 'free';
+    end if;
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    new.plan := 'free';
+    return new;
+  end if;
+
+  if tg_op = 'UPDATE' then
+    new.plan := old.plan;
+    return new;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists protect_profile_plan on public.profiles;
+create trigger protect_profile_plan
+  before insert or update on public.profiles
+  for each row execute function public.protect_profile_plan();
+
 -- Auto-create a profile row when a user signs up
 create or replace function public.handle_new_user()
 returns trigger
@@ -61,8 +98,8 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, email)
-  values (new.id, new.email)
+  insert into public.profiles (id, email, plan)
+  values (new.id, new.email, 'free')
   on conflict (id) do update
     set email = excluded.email;
   return new;

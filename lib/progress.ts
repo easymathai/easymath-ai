@@ -8,6 +8,7 @@ export type CloudPracticeProgress = {
   index?: number;
   score?: number;
   set?: string[];
+  tokens?: string[];
   completed?: boolean;
 };
 

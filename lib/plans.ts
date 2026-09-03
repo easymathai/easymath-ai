@@ -1,11 +1,15 @@
-import { FREE_DAILY_SOLVER_LIMIT } from "./constants";
+import { FREE_DAILY_SOLVER_LIMIT, FREE_PLAN_NAME } from "./constants";
 
-/** Future paid plans can extend this without rewriting solver routes. */
+/** Supported EasyMath AI plans. */
 export type UserPlan = "free" | "pro";
+
+export const USER_PLANS: UserPlan[] = ["free", "pro"];
+
+export const PRO_PLAN_NAME = "Pro";
 
 /**
  * Daily solver question limit for a plan.
- * `null` means unlimited (future paid plans).
+ * `null` means unlimited.
  */
 export function getDailySolverLimitForPlan(plan: UserPlan): number | null {
   switch (plan) {
@@ -17,9 +21,17 @@ export function getDailySolverLimitForPlan(plan: UserPlan): number | null {
   }
 }
 
-/** Until paid billing exists, every account is treated as Free. */
-export function resolveUserPlan(_planFromProfile?: string | null): UserPlan {
+/** Normalize a stored plan value; unknown/missing values become Free. */
+export function resolveUserPlan(planFromProfile?: string | null): UserPlan {
+  if (typeof planFromProfile === "string" && planFromProfile.trim().toLowerCase() === "pro") {
+    return "pro";
+  }
+
   return "free";
+}
+
+export function getPlanDisplayName(plan: UserPlan): string {
+  return plan === "pro" ? PRO_PLAN_NAME : FREE_PLAN_NAME;
 }
 
 export function isSolverLimitReached(

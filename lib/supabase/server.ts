@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
+import { resolveUserPlan, type UserPlan } from "../plans";
 import { getSupabasePublicKey, getSupabaseUrl, isSupabaseConfigured } from "./config";
 
 export function createSupabaseUserClient(accessToken: string): SupabaseClient | null {
@@ -59,6 +60,28 @@ export async function getRequestUser(
   }
 
   return { user: data.user, token, supabase };
+}
+
+/**
+ * Read plan from the authenticated user's profile row (server-trusted).
+ * Never accept plan from client request bodies.
+ */
+export async function getUserPlanFromProfile(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<UserPlan> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("plan")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("getUserPlanFromProfile error:", error);
+    return "free";
+  }
+
+  return resolveUserPlan(data?.plan);
 }
 
 export type ClaimUsageResult = {

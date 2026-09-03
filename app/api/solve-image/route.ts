@@ -5,6 +5,11 @@ import {
   releaseSolverReservation,
   type SolverGateSuccess,
 } from "@/lib/solver-gate";
+import {
+  extractPracticeQuestion,
+  jsonWithPracticeCookie,
+  signPracticeQuestions,
+} from "@/lib/practice-token";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -288,6 +293,7 @@ export async function POST(request: Request) {
 
     const file = formData.get("image");
     const level = parseStudentLevel(formData.get("level"));
+    // Extra form fields (usageMode, plan, unlimited, etc.) are ignored.
 
     if (!(file instanceof File)) {
       return NextResponse.json(
@@ -384,11 +390,23 @@ ${getLevelStyleInstructions(level)}
         );
       }
 
-      return NextResponse.json({
-        solution,
-        transcription,
-        usage: gate.usage,
-      });
+      const practiceQuestion = extractPracticeQuestion(solution);
+      const issued = await signPracticeQuestions(
+        request,
+        practiceQuestion ? [practiceQuestion] : []
+      );
+
+      return jsonWithPracticeCookie(
+        {
+          solution,
+          transcription,
+          usage: gate.usage,
+          practiceQuestion: practiceQuestion || null,
+          practiceToken:
+            issued.ok && issued.tokens[0] ? issued.tokens[0] : null,
+        },
+        issued.ok ? issued.guestSidToSet : null
+      );
     } catch (error) {
       await releaseSolverReservation(gate);
       console.error("solve-image error:", error);

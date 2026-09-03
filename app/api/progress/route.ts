@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getPlanDisplayName, resolveUserPlan } from "@/lib/plans";
 import { normalizeCloudProgress } from "@/lib/progress";
 import { getRequestUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -31,7 +32,7 @@ export async function GET(request: Request) {
   const { data, error } = await auth.supabase
     .from("profiles")
     .select(
-      "email, student_level, practice_topic, questions_solved, practice_attempted, practice_correct, activity, practice_progress, updated_at"
+      "email, plan, student_level, practice_topic, questions_solved, practice_attempted, practice_correct, activity, practice_progress, updated_at"
     )
     .eq("id", auth.user.id)
     .maybeSingle();
@@ -48,6 +49,7 @@ export async function GET(request: Request) {
     const { error: insertError } = await auth.supabase.from("profiles").insert({
       id: auth.user.id,
       email: auth.user.email,
+      plan: "free",
     });
 
     if (insertError) {
@@ -58,8 +60,12 @@ export async function GET(request: Request) {
       );
     }
 
+    const plan = "free" as const;
+
     return NextResponse.json({
       email: auth.user.email ?? "",
+      plan,
+      planLabel: getPlanDisplayName(plan),
       progress: normalizeCloudProgress({
         student_level: "middle",
         practice_topic: "mixed",
@@ -72,8 +78,12 @@ export async function GET(request: Request) {
     });
   }
 
+  const plan = resolveUserPlan(data.plan);
+
   return NextResponse.json({
     email: data.email || auth.user.email || "",
+    plan,
+    planLabel: getPlanDisplayName(plan),
     progress: normalizeCloudProgress(data),
   });
 }
@@ -126,6 +136,7 @@ export async function PUT(request: Request) {
       ? body.practiceProgress
       : {};
 
+  // Intentionally omit `plan` — clients must never set Free/Pro themselves.
   const payload = {
     id: auth.user.id,
     email: auth.user.email,
@@ -143,7 +154,7 @@ export async function PUT(request: Request) {
     .from("profiles")
     .upsert(payload, { onConflict: "id" })
     .select(
-      "email, student_level, practice_topic, questions_solved, practice_attempted, practice_correct, activity, practice_progress"
+      "email, plan, student_level, practice_topic, questions_solved, practice_attempted, practice_correct, activity, practice_progress"
     )
     .single();
 
@@ -155,8 +166,12 @@ export async function PUT(request: Request) {
     );
   }
 
+  const plan = resolveUserPlan(data.plan);
+
   return NextResponse.json({
     email: data.email || auth.user.email || "",
+    plan,
+    planLabel: getPlanDisplayName(plan),
     progress: normalizeCloudProgress(data),
   });
 }

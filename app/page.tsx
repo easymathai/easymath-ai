@@ -12,6 +12,11 @@ import {
   FREE_DAILY_SOLVER_LIMIT,
   FREE_PLAN_NAME,
 } from "@/lib/constants";
+import {
+  getPlanDisplayName,
+  resolveUserPlan,
+  type UserPlan,
+} from "@/lib/plans";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   canUseLocalSolver,
@@ -115,6 +120,12 @@ function studentFriendlyError(message: unknown, fallback: string): string {
       "We couldn't check that answer. Please try again.",
     "Unable to create a new question right now.":
       "We couldn't create a new question. Please try again.",
+    "Generate a practice question first, then try Show Solution.":
+      "Generate a practice question first, then try Show Solution.",
+    "This practice question isn't valid anymore. Generate a new practice question and try Show Solution again.":
+      "This practice question isn't valid anymore. Generate a new practice question and try Show Solution again.",
+    "Practice solutions are temporarily unavailable. Please try again later.":
+      "Practice solutions are temporarily unavailable. Please try again later.",
     "Unable to read the math in this photo.":
       "We couldn't read the math in this photo. Try a clearer picture.",
     "Something went wrong.":
@@ -196,6 +207,9 @@ export default function Home() {
   const [practiceGenerating, setPracticeGenerating] = useState(false);
   const [practiceTopic, setPracticeTopic] = useState<PracticeTopic>("mixed");
   const [practiceSet, setPracticeSet] = useState<string[]>([]);
+  const [practiceTokens, setPracticeTokens] = useState<string[]>([]);
+  const [solverPracticeToken, setSolverPracticeToken] = useState("");
+  const [solverPracticeQuestion, setSolverPracticeQuestion] = useState("");
   const [practiceIndex, setPracticeIndex] = useState(0);
   const [practiceScore, setPracticeScore] = useState(0);
   const [practiceScoredCurrent, setPracticeScoredCurrent] = useState(false);
@@ -215,6 +229,8 @@ export default function Home() {
   const [authBusy, setAuthBusy] = useState(false);
   const [dailyUsed, setDailyUsed] = useState(0);
   const [dailyLimit, setDailyLimit] = useState(FREE_DAILY_SOLVER_LIMIT);
+  const [userPlan, setUserPlan] = useState<UserPlan>("free");
+  const [solverUnlimited, setSolverUnlimited] = useState(false);
   const [cloudEnabled] = useState(() => cloudAccountsAvailable());
   const [pricingOpen, setPricingOpen] = useState(false);
 
@@ -232,6 +248,7 @@ export default function Home() {
     index: practiceIndex,
     score: practiceScore,
     set: practiceSet,
+    tokens: practiceTokens,
     completed: practiceCompleted,
   });
   latestSolutionRef.current = solution;
@@ -243,6 +260,7 @@ export default function Home() {
     index: practiceIndex,
     score: practiceScore,
     set: practiceSet,
+    tokens: practiceTokens,
     completed: practiceCompleted,
   };
 
@@ -334,6 +352,8 @@ export default function Home() {
       } else {
         setSignedIn(false);
         setUserEmail(null);
+        setUserPlan("free");
+        setSolverUnlimited(false);
         cloudReadyRef.current = false;
         const localUsage = getLocalUsageSnapshot();
         setDailyUsed(localUsage.used);
@@ -357,6 +377,8 @@ export default function Home() {
       } else {
         setSignedIn(false);
         setUserEmail(null);
+        setUserPlan("free");
+        setSolverUnlimited(false);
         cloudReadyRef.current = false;
         const localUsage = getLocalUsageSnapshot();
         setDailyUsed(localUsage.used);
@@ -396,6 +418,7 @@ export default function Home() {
     practiceIndex,
     practiceScore,
     practiceSet,
+    practiceTokens,
     practiceCompleted,
   ]);
 
@@ -412,6 +435,7 @@ export default function Home() {
     setActivePracticeQuestion("");
     setPracticeGenerating(false);
     setPracticeSet([]);
+    setPracticeTokens([]);
     setPracticeIndex(0);
     setPracticeScore(0);
     setPracticeScoredCurrent(false);
@@ -551,9 +575,21 @@ export default function Home() {
             const pp = progress.practiceProgress || {};
 
             if (Array.isArray(pp.set) && pp.set.length > 0) {
-              setPracticeSet(
-                pp.set.filter((item: unknown): item is string => typeof item === "string")
+              const restoredSet: string[] = pp.set.filter(
+                (item: unknown): item is string => typeof item === "string"
               );
+              const restoredTokenSource = Array.isArray(pp.tokens)
+                ? pp.tokens
+                : [];
+              const restoredTokens: string[] = restoredSet.map(
+                (_question: string, index: number) =>
+                  typeof restoredTokenSource[index] === "string"
+                    ? restoredTokenSource[index]
+                    : ""
+              );
+
+              setPracticeSet(restoredSet);
+              setPracticeTokens(restoredTokens);
               setPracticeIndex(Number(pp.index) || 0);
               setPracticeScore(Number(pp.score) || 0);
               setPracticeCompleted(Boolean(pp.completed));
@@ -568,8 +604,18 @@ export default function Home() {
 
       if (usageRes.ok) {
         const usage = await usageRes.json();
-        setDailyUsed(Number(usage.used) || 0);
-        setDailyLimit(Number(usage.limit) || FREE_DAILY_SOLVER_LIMIT);
+        const plan = resolveUserPlan(usage.plan);
+        setUserPlan(plan);
+
+        if (usage.unlimited || usage.limit === null) {
+          setSolverUnlimited(true);
+          setDailyUsed(Number(usage.used) || 0);
+          setDailyLimit(FREE_DAILY_SOLVER_LIMIT);
+        } else {
+          setSolverUnlimited(false);
+          setDailyUsed(Number(usage.used) || 0);
+          setDailyLimit(Number(usage.limit) || FREE_DAILY_SOLVER_LIMIT);
+        }
       }
 
       cloudReadyRef.current = true;
@@ -607,6 +653,7 @@ export default function Home() {
             index: practice.index,
             score: practice.score,
             set: practice.set,
+            tokens: practice.tokens,
             completed: practice.completed,
           },
         }),
@@ -705,6 +752,8 @@ export default function Home() {
     setSignedIn(false);
     setUserEmail(null);
     setAccountOpen(false);
+    setUserPlan("free");
+    setSolverUnlimited(false);
     cloudReadyRef.current = false;
 
     const localUsage = getLocalUsageSnapshot();
@@ -713,16 +762,29 @@ export default function Home() {
   }
 
   function applyUsageFromResponse(data: {
-    usage?: { used?: number; limit?: number } | null;
+    usage?: { used?: number; limit?: number | null } | null;
   }) {
-    if (data.usage && typeof data.usage.used === "number") {
-      setDailyUsed(data.usage.used);
-      setDailyLimit(Number(data.usage.limit) || FREE_DAILY_SOLVER_LIMIT);
+    if (!data.usage || typeof data.usage.used !== "number") {
+      return;
     }
+
+    if (data.usage.limit === null || solverUnlimited) {
+      setSolverUnlimited(true);
+      setDailyUsed(data.usage.used);
+      return;
+    }
+
+    setSolverUnlimited(false);
+    setDailyUsed(data.usage.used);
+    setDailyLimit(Number(data.usage.limit) || FREE_DAILY_SOLVER_LIMIT);
   }
 
   function guardSolverQuota(): boolean {
     if (signedIn) {
+      if (solverUnlimited) {
+        return true;
+      }
+
       if (dailyUsed >= dailyLimit) {
         setMessage(DAILY_LIMIT_MESSAGE);
         return false;
@@ -761,6 +823,8 @@ export default function Home() {
     setQuestion(finalQuestion);
     setLoading(true);
     setSolution("");
+    setSolverPracticeToken("");
+    setSolverPracticeQuestion("");
     setMessage("");
     setDetectedProblem("");
 
@@ -813,6 +877,14 @@ export default function Home() {
 
       const result = data.solution || "No solution returned.";
 
+      setSolverPracticeToken(
+        typeof data.practiceToken === "string" ? data.practiceToken.trim() : ""
+      );
+      setSolverPracticeQuestion(
+        typeof data.practiceQuestion === "string"
+          ? data.practiceQuestion.trim()
+          : ""
+      );
       setSolution(result);
 
       recordActivity(`Solved: ${finalQuestion}`, {
@@ -894,6 +966,8 @@ export default function Home() {
 
     setImageLoading(true);
     setSolution("");
+    setSolverPracticeToken("");
+    setSolverPracticeQuestion("");
     setMessage("");
     setDetectedProblem("");
     setQuestion("Math problem from uploaded photo");
@@ -947,6 +1021,14 @@ export default function Home() {
       const result =
         data.solution || "No solution returned.";
 
+      setSolverPracticeToken(
+        typeof data.practiceToken === "string" ? data.practiceToken.trim() : ""
+      );
+      setSolverPracticeQuestion(
+        typeof data.practiceQuestion === "string"
+          ? data.practiceQuestion.trim()
+          : ""
+      );
       setSolution(result);
 
       const fromApi =
@@ -1140,19 +1222,28 @@ export default function Home() {
 
     const solutionWhenRevealed = solution;
     const practiceWhenRevealed = practiceQuestion;
+    const practiceToken = practiceTokens[practiceIndex] || "";
+
+    if (!practiceToken) {
+      setPracticeFeedback(
+        "Generate a practice question first, then try Show Solution."
+      );
+      setPracticeRevealing(false);
+      return;
+    }
 
     try {
       const headers = await authHeaders({
         "Content-Type": "application/json",
       });
 
-      const response = await fetch("/api/solve", {
+      const response = await fetch("/api/practice-solution", {
         method: "POST",
         headers,
         body: JSON.stringify({
           question: practiceQuestion,
           level: studentLevel,
-          usageMode: "practice",
+          practiceToken,
         }),
       });
 
@@ -1225,11 +1316,13 @@ export default function Home() {
     setPracticeGenerating(true);
 
     try {
+      const headers = await authHeaders({
+        "Content-Type": "application/json",
+      });
+
       const response = await fetch("/api/generate-practice", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify({
           originalQuestion: sourceQuestion || currentPractice,
           previousPracticeQuestion: currentPractice,
@@ -1259,6 +1352,8 @@ export default function Home() {
         typeof data.practiceQuestion === "string"
           ? data.practiceQuestion.trim()
           : "";
+      const nextToken =
+        typeof data.practiceToken === "string" ? data.practiceToken.trim() : "";
 
       if (!nextQuestion) {
         setPracticeCorrect(null);
@@ -1282,6 +1377,15 @@ export default function Home() {
         updated[practiceIndex] = nextQuestion;
         return updated;
       });
+      setPracticeTokens((current) => {
+        if (current.length === 0) {
+          return [nextToken];
+        }
+
+        const updated = [...current];
+        updated[practiceIndex] = nextToken;
+        return updated;
+      });
     } catch {
       if (practiceRequestRef.current !== requestId) {
         return;
@@ -1302,7 +1406,7 @@ export default function Home() {
   async function generatePracticeQuestions(
     count: number,
     previousQuestions: string[]
-  ): Promise<string[]> {
+  ): Promise<{ questions: string[]; tokens: string[] }> {
     const sourceQuestion = getSourceMathQuestion(question, solution);
     const originalQuestion =
       sourceQuestion &&
@@ -1310,11 +1414,13 @@ export default function Home() {
         ? sourceQuestion
         : detectedProblem || "";
 
+    const headers = await authHeaders({
+      "Content-Type": "application/json",
+    });
+
     const response = await fetch("/api/generate-practice", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers,
       body: JSON.stringify({
         originalQuestion,
         previousQuestions,
@@ -1343,15 +1449,39 @@ export default function Home() {
         )
       : [];
 
-    if (fromList.length > 0) {
-      return fromList.map((item: string) => item.trim());
+    const questions =
+      fromList.length > 0
+        ? fromList.map((item: string) => item.trim())
+        : typeof data.practiceQuestion === "string" && data.practiceQuestion.trim()
+          ? [data.practiceQuestion.trim()]
+          : [];
+
+    if (questions.length === 0) {
+      throw new Error("We couldn't create practice questions. Please try again.");
     }
 
-    if (typeof data.practiceQuestion === "string" && data.practiceQuestion.trim()) {
-      return [data.practiceQuestion.trim()];
+    const tokenList: unknown[] = Array.isArray(data.practiceTokens)
+      ? data.practiceTokens
+      : [];
+    const tokens: string[] = questions.map((_question: string, index: number) => {
+      const listed = tokenList[index];
+
+      if (typeof listed === "string") {
+        return listed;
+      }
+
+      if (index === 0 && typeof data.practiceToken === "string") {
+        return data.practiceToken;
+      }
+
+      return "";
+    });
+
+    if (tokens.some((item: string) => !item)) {
+      throw new Error("We couldn't create practice questions. Please try again.");
     }
 
-    throw new Error("We couldn't create practice questions. Please try again.");
+    return { questions, tokens };
   }
 
   async function startPracticeSet() {
@@ -1374,14 +1504,17 @@ export default function Home() {
     setPracticeCorrect(null);
 
     try {
-      const questions = await generatePracticeQuestions(PRACTICE_SET_SIZE, []);
+      const generated = await generatePracticeQuestions(PRACTICE_SET_SIZE, []);
+      const questions = generated.questions.slice(0, PRACTICE_SET_SIZE);
+      const tokens = generated.tokens.slice(0, PRACTICE_SET_SIZE);
 
       if (practiceRequestRef.current !== requestId) {
         return;
       }
 
       resetPracticeState();
-      setPracticeSet(questions.slice(0, PRACTICE_SET_SIZE));
+      setPracticeSet(questions);
+      setPracticeTokens(tokens);
       setPracticeIndex(0);
       setPracticeScore(0);
       setPracticeScoredCurrent(false);
@@ -1463,7 +1596,8 @@ export default function Home() {
         return;
       }
 
-      const nextQuestion = generated[0];
+      const nextQuestion = generated.questions[0];
+      const nextToken = generated.tokens[0] || "";
 
       if (!nextQuestion) {
         setPracticeFeedback(
@@ -1473,8 +1607,13 @@ export default function Home() {
       }
 
       const updated = [...currentList, nextQuestion];
+      const currentTokens =
+        practiceTokens.length === currentList.length
+          ? practiceTokens
+          : currentList.map((_, index) => practiceTokens[index] || "");
       resetPracticeState();
       setPracticeSet(updated);
+      setPracticeTokens([...currentTokens, nextToken]);
       setPracticeIndex(updated.length - 1);
       setPracticeScoredCurrent(false);
       setPracticeCountedAttempt(false);
@@ -1573,10 +1712,19 @@ export default function Home() {
       ? `Question ${practiceIndex + 1} of ${PRACTICE_SET_SIZE}`
       : "No practice in progress";
 
-  const solverLimitReached = dailyUsed >= dailyLimit;
+  const solverLimitReached =
+    !solverUnlimited && dailyUsed >= dailyLimit;
+  const planLabel = signedIn
+    ? getPlanDisplayName(userPlan)
+    : FREE_PLAN_NAME;
+  const usageLabel = solverUnlimited
+    ? "Unlimited solver questions"
+    : `${dailyUsed} of ${dailyLimit} questions used today`;
 
   useEffect(() => {
-    if (!parsedPracticeQuestion || practiceCompleted) {
+    const seedQuestion = solverPracticeQuestion || parsedPracticeQuestion;
+
+    if (!seedQuestion || practiceCompleted) {
       return;
     }
 
@@ -1584,9 +1732,16 @@ export default function Home() {
       return;
     }
 
-    setPracticeSet([parsedPracticeQuestion]);
+    setPracticeSet([seedQuestion]);
+    setPracticeTokens(solverPracticeToken ? [solverPracticeToken] : []);
     setPracticeIndex(0);
-  }, [parsedPracticeQuestion, practiceCompleted, practiceSet.length]);
+  }, [
+    parsedPracticeQuestion,
+    practiceCompleted,
+    practiceSet.length,
+    solverPracticeToken,
+    solverPracticeQuestion,
+  ]);
 
   const theme = useMemo(
     () => ({
@@ -1804,7 +1959,7 @@ export default function Home() {
                   border: `1px solid ${darkMode ? "#166534" : "#bbf7d0"}`,
                 }}
               >
-                {dailyUsed} of {dailyLimit} questions used today
+                {usageLabel}
               </div>
 
               {signedIn ? (
@@ -1991,8 +2146,9 @@ export default function Home() {
                 </div>
               ) : (
                 <>
-                  Free plan: {dailyUsed} of {dailyLimit} solver questions used
-                  today. Practice questions do not use this limit.
+                  {solverUnlimited
+                    ? "Pro plan: unlimited solver questions. Practice Mode stays available."
+                    : `Free plan: ${dailyUsed} of ${dailyLimit} solver questions used today. Practice questions do not use this limit.`}
                 </>
               )}
             </div>
@@ -3272,7 +3428,10 @@ export default function Home() {
                   fontSize: "13px",
                 }}
               >
-                Plan: {FREE_PLAN_NAME} · {dailyUsed}/{dailyLimit} today
+                Plan: {planLabel}
+                {solverUnlimited
+                  ? " · Unlimited"
+                  : ` · ${dailyUsed}/${dailyLimit} today`}
               </div>
               <button
                 type="button"
@@ -3805,10 +3964,10 @@ export default function Home() {
             >
               {[
                 { label: "Email", value: userEmail || "—" },
-                { label: "Plan", value: FREE_PLAN_NAME },
+                { label: "Plan", value: planLabel },
                 {
                   label: "Daily usage",
-                  value: `${dailyUsed} of ${dailyLimit} questions used today`,
+                  value: usageLabel,
                 },
                 {
                   label: "Questions solved",
