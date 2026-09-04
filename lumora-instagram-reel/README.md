@@ -30,3 +30,12 @@ Output: `lumora-instagram-reel.mp4` (Instagram Reels / Stories ready).
 - Logo + child photo extracted from the centre flyer
 - Brand colors matching LUMORA lettering
 - Scenes: logo → brand name → speech therapy photo → services → contact CTA
+- Calm original ambient soundtrack (`assets/calm-music.mp3`) mixed softly under the reel
+
+## Re-mix audio only
+
+```bash
+ffmpeg -y -i lumora-instagram-reel-silent.mp4 -i assets/calm-music.mp3 \
+  -filter_complex "[1:a]atrim=0:18,afade=t=in:st=0:d=1.2,afade=t=out:st=16:d=2,volume=0.38[a]" \
+  -map 0:v -map "[a]" -c:v copy -c:a aac -b:a 192k -shortest lumora-instagram-reel.mp4
+```
