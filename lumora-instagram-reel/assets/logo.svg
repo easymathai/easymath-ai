@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <circle cx="100" cy="100" r="92" stroke="#1a1a1a" stroke-width="4"/>
+  <!-- stylized child reaching upward -->
+  <path d="M78 138
+           C70 118, 72 96, 88 82
+           C96 74, 108 72, 118 78
+           C128 84, 132 96, 128 108
+           C124 118, 116 126, 108 132
+           L102 148
+           C98 156, 90 154, 88 146
+           Z" fill="#D6453D"/>
+  <circle cx="108" cy="62" r="16" fill="#D6453D"/>
+  <!-- reaching arm -->
+  <path d="M118 78
+           C130 68, 142 58, 148 48
+           C150 45, 154 46, 154 50
+           C152 62, 142 74, 130 84
+           Z" fill="#D6453D"/>
+  <!-- green star -->
+  <path d="M152 28
+           L157.5 40.5 L171 42 L161 51.5 L163.5 65
+           L152 58.5 L140.5 65 L143 51.5 L133 42 L146.5 40.5 Z"
+        fill="#2F6B3A"/>
+</svg>
