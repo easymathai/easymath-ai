@@ -111,6 +111,35 @@ async function main() {
     process.exit(1);
   }
 
+  const music = path.join(ROOT, 'assets', 'calm-music.mp3');
+  if (fs.existsSync(music)) {
+    console.log('Mixing calm background music...');
+    const mixed = path.join(ROOT, 'lumora-instagram-reel-mixed.mp4');
+    const mix = spawnSync(
+      'ffmpeg',
+      [
+        '-y',
+        '-i', OUT,
+        '-i', music,
+        '-filter_complex',
+        `[1:a]atrim=0:${DURATION},afade=t=in:st=0:d=1.2,afade=t=out:st=${DURATION - 2}:d=2,volume=0.38[a]`,
+        '-map', '0:v',
+        '-map', '[a]',
+        '-c:v', 'copy',
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        '-shortest',
+        mixed,
+      ],
+      { encoding: 'utf8' }
+    );
+    if (mix.status !== 0) {
+      console.error(mix.stderr);
+      process.exit(1);
+    }
+    fs.renameSync(mixed, OUT);
+  }
+
   fs.copyFileSync(OUT, ARTIFACT);
   console.log('Wrote', OUT);
   console.log('Artifact', ARTIFACT);
