@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1080, height=1920" />
+  <title>Lumora Instagram Reel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --yellow: #F7D766;
+      --yellow-deep: #F0C43A;
+      --cream: #FFF8E8;
+      --blue: #1E4A93;
+      --blue-soft: #2F63B5;
+      --red: #D6453D;
+      --orange: #E17038;
+      --green: #5FAE45;
+      --sky: #3BA4D0;
+      --purple: #8B5FBF;
+      --ink: #1A1A1A;
+      --white: #FFFFFF;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      background: #111;
+      font-family: "Nunito", system-ui, sans-serif;
+      color: var(--ink);
+    }
+
+    .stage {
+      position: relative;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      background:
+        radial-gradient(ellipse 90% 60% at 50% 18%, rgba(247, 215, 102, 0.55), transparent 70%),
+        radial-gradient(ellipse 70% 50% at 80% 70%, rgba(59, 164, 208, 0.18), transparent 65%),
+        radial-gradient(ellipse 60% 40% at 10% 85%, rgba(95, 174, 69, 0.16), transparent 60%),
+        linear-gradient(180deg, #FFFCF3 0%, #FFF3D0 42%, #EAF3FF 100%);
+    }
+
+    .blob {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(2px);
+      opacity: 0;
+      animation: blobIn 1.2s ease forwards;
+    }
+    .blob.a {
+      width: 420px; height: 420px; left: -120px; top: 220px;
+      background: rgba(247, 215, 102, 0.35);
+      animation-delay: 0.1s;
+    }
+    .blob.b {
+      width: 360px; height: 360px; right: -90px; top: 980px;
+      background: rgba(59, 164, 208, 0.22);
+      animation-delay: 0.25s;
+    }
+    .blob.c {
+      width: 280px; height: 280px; left: 120px; bottom: 180px;
+      background: rgba(214, 69, 61, 0.12);
+      animation-delay: 0.4s;
+    }
+
+    @keyframes blobIn {
+      from { opacity: 0; transform: scale(0.7); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .scene {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* ===== Scene 1: Logo ===== */
+    #s1 { animation: sceneShow 0.6s ease 0.2s forwards, sceneHide 0.5s ease 3.4s forwards; }
+    .logo-wrap {
+      width: 420px;
+      height: 420px;
+      display: grid;
+      place-items: center;
+      transform: scale(0.6);
+      opacity: 0;
+      animation: logoPop 1s cubic-bezier(.2,1.4,.3,1) 0.5s forwards;
+    }
+    .logo-wrap img {
+      width: 380px;
+      height: 380px;
+      object-fit: contain;
+      filter: drop-shadow(0 18px 40px rgba(30, 74, 147, 0.18));
+    }
+    .star-glow {
+      position: absolute;
+      width: 90px; height: 90px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(95,174,69,0.55), transparent 70%);
+      top: calc(50% - 210px);
+      right: calc(50% - 210px);
+      opacity: 0;
+      animation: twinkle 1.4s ease 1.2s infinite;
+    }
+    .welcome {
+      margin-top: 48px;
+      font-family: "Fredoka", sans-serif;
+      font-weight: 600;
+      font-size: 42px;
+      letter-spacing: 0.08em;
+      color: var(--blue);
+      text-transform: uppercase;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeUp 0.7s ease 1.4s forwards;
+    }
+
+    @keyframes logoPop {
+      to { opacity: 1; transform: scale(1); }
+    }
+    @keyframes twinkle {
+      0%, 100% { opacity: 0.25; transform: scale(0.85); }
+      50% { opacity: 0.9; transform: scale(1.15); }
+    }
+
+    /* ===== Scene 2: Brand name ===== */
+    #s2 {
+      animation: sceneShow 0.55s ease 3.6s forwards, sceneHide 0.45s ease 7.0s forwards;
+    }
+    .brand {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .brand span {
+      font-family: "Fredoka", sans-serif;
+      font-weight: 700;
+      font-size: 148px;
+      line-height: 1;
+      opacity: 0;
+      transform: translateY(80px) rotate(-8deg) scale(0.6);
+      display: inline-block;
+      text-shadow: 0 10px 0 rgba(0,0,0,0.04);
+    }
+    .brand span:nth-child(1) { color: var(--orange); animation: letterIn 0.55s cubic-bezier(.2,1.3,.3,1) 3.85s forwards; }
+    .brand span:nth-child(2) { color: var(--green);  animation: letterIn 0.55s cubic-bezier(.2,1.3,.3,1) 4.00s forwards; }
+    .brand span:nth-child(3) { color: var(--sky);    animation: letterIn 0.55s cubic-bezier(.2,1.3,.3,1) 4.15s forwards; }
+    .brand span:nth-child(4) { color: var(--purple); animation: letterIn 0.55s cubic-bezier(.2,1.3,.3,1) 4.30s forwards; }
+    .brand span:nth-child(5) { color: var(--orange); animation: letterIn 0.55s cubic-bezier(.2,1.3,.3,1) 4.45s forwards; }
+    .brand span:nth-child(6) { color: var(--yellow-deep); animation: letterIn 0.55s cubic-bezier(.2,1.3,.3,1) 4.60s forwards; }
+
+    .centre {
+      margin-top: 28px;
+      font-family: "Fredoka", sans-serif;
+      font-weight: 650;
+      font-size: 46px;
+      letter-spacing: 0.14em;
+      color: var(--ink);
+      opacity: 0;
+      transform: translateY(16px);
+      animation: fadeUp 0.6s ease 5.0s forwards;
+    }
+    .divider {
+      width: 0;
+      height: 6px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--orange), var(--yellow), var(--green), var(--sky), var(--purple));
+      margin-top: 28px;
+      animation: growLine 0.8s ease 5.2s forwards;
+    }
+    .tag {
+      margin-top: 36px;
+      max-width: 820px;
+      text-align: center;
+      font-size: 40px;
+      font-weight: 700;
+      line-height: 1.35;
+      color: var(--blue);
+      opacity: 0;
+      transform: translateY(18px);
+      animation: fadeUp 0.7s ease 5.5s forwards;
+    }
+
+    @keyframes letterIn {
+      to { opacity: 1; transform: translateY(0) rotate(0) scale(1); }
+    }
+    @keyframes growLine {
+      to { width: 360px; }
+    }
+
+    /* ===== Scene 3: Photo + speech therapy ===== */
+    #s3 {
+      animation: sceneShow 0.55s ease 7.2s forwards, sceneHide 0.45s ease 11.4s forwards;
+    }
+    .photo-frame {
+      position: relative;
+      width: 860px;
+      height: 860px;
+      border-radius: 48px;
+      overflow: hidden;
+      box-shadow: 0 30px 80px rgba(30, 74, 147, 0.22);
+      transform: scale(0.92);
+      opacity: 0;
+      animation: photoIn 0.9s cubic-bezier(.2,1.1,.3,1) 7.4s forwards;
+    }
+    .photo-frame::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, transparent 55%, rgba(30,74,147,0.55) 100%);
+      pointer-events: none;
+    }
+    .photo-frame img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center 20%;
+      transform: scale(1.08);
+      animation: kenBurns 5s ease 7.4s forwards;
+    }
+    .photo-caption {
+      position: absolute;
+      left: 48px;
+      right: 48px;
+      bottom: 48px;
+      z-index: 2;
+      color: white;
+      font-family: "Fredoka", sans-serif;
+      font-size: 52px;
+      font-weight: 650;
+      line-height: 1.2;
+      text-shadow: 0 4px 18px rgba(0,0,0,0.35);
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeUp 0.7s ease 8.2s forwards;
+    }
+    .pill-row {
+      margin-top: 48px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      justify-content: center;
+      max-width: 920px;
+    }
+    .pill {
+      background: white;
+      border: 3px solid rgba(30,74,147,0.12);
+      color: var(--blue);
+      font-weight: 800;
+      font-size: 28px;
+      padding: 16px 28px;
+      border-radius: 999px;
+      opacity: 0;
+      transform: translateY(24px) scale(0.9);
+      box-shadow: 0 10px 24px rgba(30,74,147,0.08);
+    }
+    .pill:nth-child(1) { animation: fadeUpScale 0.5s ease 8.8s forwards; }
+    .pill:nth-child(2) { animation: fadeUpScale 0.5s ease 9.05s forwards; }
+    .pill:nth-child(3) { animation: fadeUpScale 0.5s ease 9.3s forwards; }
+    .pill:nth-child(4) { animation: fadeUpScale 0.5s ease 9.55s forwards; }
+
+    @keyframes photoIn {
+      to { opacity: 1; transform: scale(1); }
+    }
+    @keyframes kenBurns {
+      to { transform: scale(1.18) translateY(-18px); }
+    }
+    @keyframes fadeUpScale {
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* ===== Scene 4: Services ===== */
+    #s4 {
+      animation: sceneShow 0.55s ease 11.6s forwards, sceneHide 0.45s ease 15.4s forwards;
+    }
+    .services-title {
+      font-family: "Fredoka", sans-serif;
+      font-size: 56px;
+      font-weight: 650;
+      color: var(--blue);
+      margin-bottom: 48px;
+      opacity: 0;
+      transform: translateY(16px);
+      animation: fadeUp 0.55s ease 11.8s forwards;
+    }
+    .services {
+      width: 900px;
+      display: grid;
+      gap: 22px;
+    }
+    .service {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      background: rgba(255,255,255,0.88);
+      border-radius: 28px;
+      padding: 28px 32px;
+      border-left: 10px solid var(--yellow-deep);
+      box-shadow: 0 12px 30px rgba(30,74,147,0.08);
+      opacity: 0;
+      transform: translateX(-40px);
+    }
+    .service:nth-child(1) { border-left-color: var(--orange); animation: slideIn 0.5s ease 12.0s forwards; }
+    .service:nth-child(2) { border-left-color: var(--green);  animation: slideIn 0.5s ease 12.25s forwards; }
+    .service:nth-child(3) { border-left-color: var(--sky);    animation: slideIn 0.5s ease 12.5s forwards; }
+    .service:nth-child(4) { border-left-color: var(--purple); animation: slideIn 0.5s ease 12.75s forwards; }
+    .service:nth-child(5) { border-left-color: var(--red);    animation: slideIn 0.5s ease 13.0s forwards; }
+    .dot {
+      width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+      background: currentColor;
+    }
+    .service:nth-child(1) .dot { color: var(--orange); }
+    .service:nth-child(2) .dot { color: var(--green); }
+    .service:nth-child(3) .dot { color: var(--sky); }
+    .service:nth-child(4) .dot { color: var(--purple); }
+    .service:nth-child(5) .dot { color: var(--red); }
+    .service strong {
+      font-family: "Fredoka", sans-serif;
+      font-size: 36px;
+      font-weight: 650;
+      display: block;
+      color: var(--ink);
+    }
+    .service span {
+      font-size: 24px;
+      color: #4a5568;
+      font-weight: 700;
+    }
+
+    @keyframes slideIn {
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    /* ===== Scene 5: CTA ===== */
+    #s5 {
+      animation: sceneShow 0.55s ease 15.6s forwards;
+    }
+    .cta-card {
+      width: 900px;
+      background: linear-gradient(160deg, var(--blue) 0%, #163A78 100%);
+      color: white;
+      border-radius: 48px;
+      padding: 72px 56px 64px;
+      text-align: center;
+      box-shadow: 0 30px 70px rgba(30,74,147,0.28);
+      opacity: 0;
+      transform: translateY(40px) scale(0.96);
+      animation: fadeUpScale 0.7s cubic-bezier(.2,1.1,.3,1) 15.8s forwards;
+      position: relative;
+      overflow: hidden;
+    }
+    .cta-card::before {
+      content: "";
+      position: absolute;
+      width: 280px; height: 280px;
+      border-radius: 50%;
+      background: rgba(247,215,102,0.16);
+      top: -80px; right: -60px;
+    }
+    .cta-logo {
+      width: 160px;
+      height: 160px;
+      margin: 0 auto 28px;
+      background: white;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    }
+    .cta-logo img { width: 130px; height: 130px; object-fit: contain; }
+    .cta-brand {
+      font-family: "Fredoka", sans-serif;
+      font-size: 64px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      margin-bottom: 8px;
+    }
+    .cta-brand .c1 { color: #FFB07A; }
+    .cta-brand .c2 { color: #9BE06E; }
+    .cta-brand .c3 { color: #7DD3F0; }
+    .cta-brand .c4 { color: #C9A0FF; }
+    .cta-brand .c5 { color: #FFB07A; }
+    .cta-brand .c6 { color: #FFE28A; }
+    .cta-sub {
+      font-size: 28px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      opacity: 0.9;
+      margin-bottom: 40px;
+      font-weight: 700;
+    }
+    .cta-line {
+      font-size: 34px;
+      font-weight: 800;
+      margin: 18px 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+    }
+    .cta-phone {
+      margin-top: 28px;
+      display: inline-block;
+      background: var(--yellow);
+      color: var(--ink);
+      font-family: "Fredoka", sans-serif;
+      font-size: 40px;
+      font-weight: 700;
+      padding: 22px 40px;
+      border-radius: 999px;
+      animation: pulseCta 1.6s ease 17s infinite;
+    }
+    .cta-hours {
+      margin-top: 28px;
+      font-size: 26px;
+      opacity: 0.88;
+      font-weight: 700;
+    }
+    .cta-footer {
+      margin-top: 36px;
+      font-size: 30px;
+      font-weight: 800;
+      color: var(--yellow);
+    }
+
+    @keyframes pulseCta {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.04); }
+    }
+
+    @keyframes fadeUp {
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes sceneShow {
+      to { opacity: 1; }
+    }
+    @keyframes sceneHide {
+      to { opacity: 0; }
+    }
+
+    /* Progress bar */
+    .progress {
+      position: absolute;
+      left: 48px; right: 48px; bottom: 36px;
+      height: 8px;
+      background: rgba(30,74,147,0.12);
+      border-radius: 999px;
+      overflow: hidden;
+      z-index: 20;
+    }
+    .progress > i {
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--orange), var(--yellow-deep), var(--green));
+      border-radius: 999px;
+      animation: progress 18s linear forwards;
+    }
+    @keyframes progress {
+      to { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <div class="blob a"></div>
+    <div class="blob b"></div>
+    <div class="blob c"></div>
+
+    <!-- Scene 1 -->
+    <section class="scene" id="s1">
+      <div class="logo-wrap">
+        <div class="star-glow"></div>
+        <img src="assets/logo.png" alt="Lumora logo" />
+      </div>
+      <p class="welcome">Welcome to</p>
+    </section>
+
+    <!-- Scene 2 -->
+    <section class="scene" id="s2">
+      <div class="brand" aria-label="LUMORA">
+        <span>L</span><span>U</span><span>M</span><span>O</span><span>R</span><span>A</span>
+      </div>
+      <p class="centre">CHILD DEVELOPMENT CENTRE</p>
+      <div class="divider"></div>
+      <p class="tag">Helping every child find their voice</p>
+    </section>
+
+    <!-- Scene 3 -->
+    <section class="scene" id="s3">
+      <div class="photo-frame">
+        <img src="assets/child.jpg" alt="Child at play" />
+        <p class="photo-caption">Speech Therapy with care</p>
+      </div>
+      <div class="pill-row">
+        <div class="pill">Pediatric</div>
+        <div class="pill">Fluency</div>
+        <div class="pill">Articulation</div>
+        <div class="pill">Voice Therapy</div>
+      </div>
+    </section>
+
+    <!-- Scene 4 -->
+    <section class="scene" id="s4">
+      <h2 class="services-title">We support children with</h2>
+      <div class="services">
+        <div class="service">
+          <div class="dot"></div>
+          <div>
+            <strong>Delayed Speech</strong>
+            <span>വൈകിയുള്ള സംസാരം</span>
+          </div>
+        </div>
+        <div class="service">
+          <div class="dot"></div>
+          <div>
+            <strong>Stuttering &amp; Fluency</strong>
+            <span>വിക്ക് / Fluency Therapy</span>
+          </div>
+        </div>
+        <div class="service">
+          <div class="dot"></div>
+          <div>
+            <strong>Pronunciation</strong>
+            <span>Articulation Therapy</span>
+          </div>
+        </div>
+        <div class="service">
+          <div class="dot"></div>
+          <div>
+            <strong>Hearing-related Speech</strong>
+            <span>Auditory Training &amp; AVT</span>
+          </div>
+        </div>
+        <div class="service">
+          <div class="dot"></div>
+          <div>
+            <strong>Neurogenic Care</strong>
+            <span>Stroke &amp; neurological speech support</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Scene 5 -->
+    <section class="scene" id="s5">
+      <div class="cta-card">
+        <div class="cta-logo">
+          <img src="assets/logo.png" alt="" />
+        </div>
+        <div class="cta-brand">
+          <span class="c1">L</span><span class="c2">U</span><span class="c3">M</span><span class="c4">O</span><span class="c5">R</span><span class="c6">A</span>
+        </div>
+        <p class="cta-sub">Child Development Centre</p>
+        <p class="cta-line">📍 Kunnamangalam, Kozhikode</p>
+        <p class="cta-line">Nahar Complex, Mukkam Road Junction</p>
+        <div class="cta-phone">📞 +91 8111 811 917</div>
+        <p class="cta-hours">Everyday 9:00 AM – 5:30 PM · Sunday Holiday</p>
+        <p class="cta-footer">Book a consultation today</p>
+      </div>
+    </section>
+
+    <div class="progress"><i></i></div>
+  </div>
+</body>
+</html>
