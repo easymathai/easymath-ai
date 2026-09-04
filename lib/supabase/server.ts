@@ -27,6 +27,27 @@ export function createSupabaseUserClient(accessToken: string): SupabaseClient | 
   });
 }
 
+/** Public-key client with no user JWT. Used only for secret-gated guest usage RPCs. */
+export function createSupabaseAnonClient(): SupabaseClient | null {
+  if (!isSupabaseConfigured()) {
+    return null;
+  }
+
+  const url = getSupabaseUrl();
+  const publicKey = getSupabasePublicKey();
+
+  if (!url || !publicKey) {
+    return null;
+  }
+
+  return createClient(url, publicKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
+
 export function getBearerToken(request: Request): string | null {
   const header = request.headers.get("authorization") || request.headers.get("Authorization");
 
@@ -145,4 +166,81 @@ export async function getSolverUsage(
     used: parsed.used,
     limit: parsed.limit,
   };
+}
+
+async function callGuestUsageRpc(
+  fn: "get_guest_solver_usage" | "claim_guest_solver_usage" | "release_guest_solver_usage",
+  guestId: string,
+  secret: string,
+  ipGuestId?: string | null
+): Promise<ClaimUsageResult | null> {
+  const supabase = createSupabaseAnonClient();
+
+  if (!supabase) {
+    return null;
+  }
+
+  const args: Record<string, string> = {
+    p_guest_id: guestId,
+    p_secret: secret,
+  };
+
+  if (ipGuestId) {
+    args.p_ip_id = ipGuestId;
+  }
+
+  const { data, error } = await supabase.rpc(fn, args);
+
+  if (error || !data) {
+    console.error(`${fn} error:`, error);
+    return null;
+  }
+
+  return parseUsagePayload(data);
+}
+
+export async function getGuestSolverUsage(
+  guestId: string,
+  secret: string
+): Promise<{ used: number; limit: number } | null> {
+  const parsed = await callGuestUsageRpc(
+    "get_guest_solver_usage",
+    guestId,
+    secret
+  );
+
+  if (!parsed) {
+    return null;
+  }
+
+  return {
+    used: parsed.used,
+    limit: parsed.limit,
+  };
+}
+
+export async function claimGuestSolverUsage(
+  guestId: string,
+  secret: string,
+  ipGuestId?: string | null
+): Promise<ClaimUsageResult | null> {
+  return callGuestUsageRpc(
+    "claim_guest_solver_usage",
+    guestId,
+    secret,
+    ipGuestId
+  );
+}
+
+export async function releaseGuestSolverUsage(
+  guestId: string,
+  secret: string,
+  ipGuestId?: string | null
+): Promise<ClaimUsageResult | null> {
+  return callGuestUsageRpc(
+    "release_guest_solver_usage",
+    guestId,
+    secret,
+    ipGuestId
+  );
 }

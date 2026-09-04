@@ -320,9 +320,11 @@ export default function Home() {
       }
     }
 
-    const localUsage = getLocalUsageSnapshot();
-    setDailyUsed(localUsage.used);
-    setDailyLimit(localUsage.limit);
+    if (!cloudAccountsAvailable()) {
+      const localUsage = getLocalUsageSnapshot();
+      setDailyUsed(localUsage.used);
+      setDailyLimit(localUsage.limit);
+    }
   }, []);
 
   useEffect(() => {
@@ -355,9 +357,7 @@ export default function Home() {
         setUserPlan("free");
         setSolverUnlimited(false);
         cloudReadyRef.current = false;
-        const localUsage = getLocalUsageSnapshot();
-        setDailyUsed(localUsage.used);
-        setDailyLimit(localUsage.limit);
+        await loadGuestUsage();
       }
     }
 
@@ -380,9 +380,7 @@ export default function Home() {
         setUserPlan("free");
         setSolverUnlimited(false);
         cloudReadyRef.current = false;
-        const localUsage = getLocalUsageSnapshot();
-        setDailyUsed(localUsage.used);
-        setDailyLimit(localUsage.limit);
+        void loadGuestUsage();
       }
     });
 
@@ -502,6 +500,33 @@ export default function Home() {
       }
       return next;
     });
+  }
+
+  async function loadGuestUsage() {
+    if (!cloudAccountsAvailable()) {
+      const localUsage = getLocalUsageSnapshot();
+      setDailyUsed(localUsage.used);
+      setDailyLimit(localUsage.limit);
+      setUserPlan("free");
+      setSolverUnlimited(false);
+      return;
+    }
+
+    try {
+      const usageRes = await fetch("/api/usage");
+
+      if (!usageRes.ok) {
+        return;
+      }
+
+      const usage = await usageRes.json();
+      setUserPlan("free");
+      setSolverUnlimited(false);
+      setDailyUsed(Number(usage.used) || 0);
+      setDailyLimit(Number(usage.limit) || FREE_DAILY_SOLVER_LIMIT);
+    } catch (error) {
+      console.error("loadGuestUsage error:", error);
+    }
   }
 
   async function loadCloudProfileAndUsage() {
@@ -756,9 +781,7 @@ export default function Home() {
     setSolverUnlimited(false);
     cloudReadyRef.current = false;
 
-    const localUsage = getLocalUsageSnapshot();
-    setDailyUsed(localUsage.used);
-    setDailyLimit(localUsage.limit);
+    void loadGuestUsage();
   }
 
   function applyUsageFromResponse(data: {
@@ -780,24 +803,24 @@ export default function Home() {
   }
 
   function guardSolverQuota(): boolean {
-    if (signedIn) {
-      if (solverUnlimited) {
-        return true;
-      }
+    if (signedIn && solverUnlimited) {
+      return true;
+    }
 
-      if (dailyUsed >= dailyLimit) {
+    if (!signedIn && !cloudEnabled) {
+      if (!canUseLocalSolver()) {
         setMessage(DAILY_LIMIT_MESSAGE);
+        const snap = getLocalUsageSnapshot();
+        setDailyUsed(snap.used);
+        setDailyLimit(snap.limit);
         return false;
       }
 
       return true;
     }
 
-    if (!canUseLocalSolver()) {
+    if (dailyUsed >= dailyLimit) {
       setMessage(DAILY_LIMIT_MESSAGE);
-      const snap = getLocalUsageSnapshot();
-      setDailyUsed(snap.used);
-      setDailyLimit(snap.limit);
       return false;
     }
 
@@ -867,7 +890,7 @@ export default function Home() {
         return;
       }
 
-      if (signedIn) {
+      if (signedIn || cloudEnabled) {
         applyUsageFromResponse(data);
       } else {
         const consumed = consumeLocalSolver();
@@ -1010,7 +1033,7 @@ export default function Home() {
         return;
       }
 
-      if (signedIn) {
+      if (signedIn || cloudEnabled) {
         applyUsageFromResponse(data);
       } else {
         const consumed = consumeLocalSolver();

@@ -10,6 +10,7 @@ import {
   jsonWithPracticeCookie,
   signPracticeQuestions,
 } from "@/lib/practice-token";
+import { attachGuestCookie } from "@/lib/guest-identity";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -366,9 +367,12 @@ export async function POST(request: Request) {
 
       if (!transcription) {
         await releaseSolverReservation(gate);
-        return NextResponse.json(
-          { error: "Unable to read the math in this photo." },
-          { status: 500 }
+        return attachGuestCookie(
+          NextResponse.json(
+            { error: "Unable to read the math in this photo." },
+            { status: 500 }
+          ),
+          gate.guestCookieToSet
         );
       }
 
@@ -384,9 +388,12 @@ ${getLevelStyleInstructions(level)}
 
       if (!solution || !solution.trim()) {
         await releaseSolverReservation(gate);
-        return NextResponse.json(
-          { error: "No solution returned." },
-          { status: 500 }
+        return attachGuestCookie(
+          NextResponse.json(
+            { error: "No solution returned." },
+            { status: 500 }
+          ),
+          gate.guestCookieToSet
         );
       }
 
@@ -396,24 +403,30 @@ ${getLevelStyleInstructions(level)}
         practiceQuestion ? [practiceQuestion] : []
       );
 
-      return jsonWithPracticeCookie(
-        {
-          solution,
-          transcription,
-          usage: gate.usage,
-          practiceQuestion: practiceQuestion || null,
-          practiceToken:
-            issued.ok && issued.tokens[0] ? issued.tokens[0] : null,
-        },
-        issued.ok ? issued.guestSidToSet : null
+      return attachGuestCookie(
+        jsonWithPracticeCookie(
+          {
+            solution,
+            transcription,
+            usage: gate.usage,
+            practiceQuestion: practiceQuestion || null,
+            practiceToken:
+              issued.ok && issued.tokens[0] ? issued.tokens[0] : null,
+          },
+          issued.ok ? issued.guestSidToSet : null
+        ),
+        gate.guestCookieToSet
       );
     } catch (error) {
       await releaseSolverReservation(gate);
       console.error("solve-image error:", error);
 
-      return NextResponse.json(
-        { error: "Unable to read image." },
-        { status: 500 }
+      return attachGuestCookie(
+        NextResponse.json(
+          { error: "Unable to read image." },
+          { status: 500 }
+        ),
+        gate.guestCookieToSet
       );
     }
   } catch (error) {

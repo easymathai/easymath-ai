@@ -10,6 +10,7 @@ import {
   jsonWithPracticeCookie,
   signPracticeQuestions,
 } from "@/lib/practice-token";
+import { attachGuestCookie } from "@/lib/guest-identity";
 
 export async function POST(request: Request) {
   try {
@@ -40,9 +41,12 @@ export async function POST(request: Request) {
       if (!solution.trim()) {
         await releaseSolverReservation(gate);
 
-        return NextResponse.json(
-          { error: "Unable to solve the question right now." },
-          { status: 500 }
+        return attachGuestCookie(
+          NextResponse.json(
+            { error: "Unable to solve the question right now." },
+            { status: 500 }
+          ),
+          gate.guestCookieToSet
         );
       }
 
@@ -52,24 +56,30 @@ export async function POST(request: Request) {
         practiceQuestion ? [practiceQuestion] : []
       );
 
-      return jsonWithPracticeCookie(
-        {
-          solution,
-          usage: gate.usage ?? null,
-          practiceQuestion: practiceQuestion || null,
-          practiceToken:
-            issued.ok && issued.tokens[0] ? issued.tokens[0] : null,
-        },
-        issued.ok ? issued.guestSidToSet : null
+      return attachGuestCookie(
+        jsonWithPracticeCookie(
+          {
+            solution,
+            usage: gate.usage ?? null,
+            practiceQuestion: practiceQuestion || null,
+            practiceToken:
+              issued.ok && issued.tokens[0] ? issued.tokens[0] : null,
+          },
+          issued.ok ? issued.guestSidToSet : null
+        ),
+        gate.guestCookieToSet
       );
     } catch (error) {
       await releaseSolverReservation(gate);
 
       console.error("EasyMath AI API error:", error);
 
-      return NextResponse.json(
-        { error: "Unable to solve the question right now." },
-        { status: 500 }
+      return attachGuestCookie(
+        NextResponse.json(
+          { error: "Unable to solve the question right now." },
+          { status: 500 }
+        ),
+        gate.guestCookieToSet
       );
     }
   } catch (error) {
