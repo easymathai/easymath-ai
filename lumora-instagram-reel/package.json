@@ -5,5 +5,8 @@
   "description": "Instagram Reels animation for Lumora Child Development Centre",
   "scripts": {
     "render": "node render.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.62.1"
   }
 }

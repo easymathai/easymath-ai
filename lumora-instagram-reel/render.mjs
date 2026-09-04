@@ -2,13 +2,14 @@
 /**
  * Renders lumora-instagram-reel/index.html to a 1080x1920 MP4.
  */
-const { chromium } = require('playwright');
-const fs = require('fs');
-const path = require('path');
-const { spawnSync } = require('child_process');
-const http = require('http');
+import { chromium } from 'playwright';
+import fs from 'fs';
+import path from 'path';
+import { spawnSync } from 'child_process';
+import http from 'http';
+import { fileURLToPath } from 'url';
 
-const ROOT = __dirname;
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const FRAMES = path.join(ROOT, 'frames');
 const OUT = path.join(ROOT, 'lumora-instagram-reel.mp4');
 const ARTIFACT = '/opt/cursor/artifacts/lumora-instagram-reel.mp4';
@@ -63,7 +64,7 @@ async function main() {
 
   // Freeze CSS animations and drive them via currentTime
   await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(1500); // fonts
+  await page.waitForTimeout(2500); // fonts including Malayalam
 
   await page.evaluate(() => {
     document.getAnimations().forEach((a) => {
