@@ -11,6 +11,7 @@ import {
   DAILY_LIMIT_MESSAGE,
   FREE_DAILY_SOLVER_LIMIT,
   FREE_PLAN_NAME,
+  utcUsageDate,
 } from "@/lib/constants";
 import {
   getPlanDisplayName,
@@ -18,8 +19,15 @@ import {
   type UserPlan,
 } from "@/lib/plans";
 import {
+  applyDashboardStreak,
+  emptyDashboardStats,
+  isDashboardStatsEmpty,
+  normalizeDashboardStats,
   normalizeSolverHistory,
+  rankDashboardTopics,
+  recordDashboardTopicAttempt,
   SOLVER_HISTORY_LIMIT,
+  type CloudDashboardStats,
 } from "@/lib/progress";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
@@ -221,6 +229,9 @@ export default function Home() {
   const [practiceScoredCurrent, setPracticeScoredCurrent] = useState(false);
   const [practiceCountedAttempt, setPracticeCountedAttempt] = useState(false);
   const [practiceCompleted, setPracticeCompleted] = useState(false);
+  const [dashboardStats, setDashboardStats] = useState<CloudDashboardStats>(
+    emptyDashboardStats
+  );
   const [detectedProblem, setDetectedProblem] = useState("");
   const [stats, setStats] = useState<StudentStats>(emptyStats);
   const [hasMounted, setHasMounted] = useState(false);
@@ -248,6 +259,7 @@ export default function Home() {
   const cloudReadyRef = useRef(false);
   const statsRef = useRef(stats);
   const historyRef = useRef(history);
+  const dashboardStatsRef = useRef(dashboardStats);
   const levelRef = useRef(studentLevel);
   const topicRef = useRef(practiceTopic);
   const practiceSyncRef = useRef({
@@ -261,6 +273,7 @@ export default function Home() {
   latestSolutionRef.current = solution;
   statsRef.current = stats;
   historyRef.current = history;
+  dashboardStatsRef.current = dashboardStats;
   levelRef.current = studentLevel;
   topicRef.current = practiceTopic;
   practiceSyncRef.current = {
@@ -326,6 +339,18 @@ export default function Home() {
       } catch {
         setStats(emptyStats());
       }
+    }
+
+    try {
+      const savedDashboard = localStorage.getItem("easymath-dashboard-stats");
+
+      if (savedDashboard) {
+        const next = normalizeDashboardStats(JSON.parse(savedDashboard));
+        dashboardStatsRef.current = next;
+        setDashboardStats(next);
+      }
+    } catch {
+      // ignore
     }
 
     if (!cloudAccountsAvailable()) {
@@ -427,6 +452,7 @@ export default function Home() {
     practiceTokens,
     practiceCompleted,
     history,
+    dashboardStats,
   ]);
 
   useEffect(() => {
@@ -511,6 +537,43 @@ export default function Home() {
     });
   }
 
+  function persistDashboardStats(next: CloudDashboardStats) {
+    const normalized = normalizeDashboardStats(next);
+    dashboardStatsRef.current = normalized;
+    setDashboardStats(normalized);
+
+    try {
+      localStorage.setItem(
+        "easymath-dashboard-stats",
+        JSON.stringify(normalized)
+      );
+    } catch {
+      // Safari private mode may block storage.
+    }
+  }
+
+  function touchDashboardStreak() {
+    persistDashboardStats(
+      applyDashboardStreak(dashboardStatsRef.current, utcUsageDate())
+    );
+  }
+
+  function recordPracticeDashboard(extra: {
+    attemptedDelta?: number;
+    correctDelta?: number;
+  }) {
+    persistDashboardStats(
+      applyDashboardStreak(
+        recordDashboardTopicAttempt(
+          dashboardStatsRef.current,
+          topicRef.current,
+          extra
+        ),
+        utcUsageDate()
+      )
+    );
+  }
+
   async function loadGuestUsage() {
     if (!cloudAccountsAvailable()) {
       const localUsage = getLocalUsageSnapshot();
@@ -579,16 +642,22 @@ export default function Home() {
             cloudHistory.length === 0 &&
             normalizeSolverHistory(historyRef.current).length > 0;
 
+          const cloudDashboard = normalizeDashboardStats(
+            progress.dashboardStats
+          );
           const cloudEmpty =
             Number(progress.questionsSolved) === 0 &&
             Number(progress.practiceAttempted) === 0 &&
-            (!Array.isArray(progress.activity) || progress.activity.length === 0);
+            (!Array.isArray(progress.activity) ||
+              progress.activity.length === 0) &&
+            isDashboardStatsEmpty(cloudDashboard);
 
           const local = statsRef.current;
           const localHasData =
             local.questionsSolved > 0 ||
             local.practiceAttempted > 0 ||
-            local.activity.length > 0;
+            local.activity.length > 0 ||
+            !isDashboardStatsEmpty(dashboardStatsRef.current);
 
           if (cloudEmpty && localHasData) {
             cloudReadyRef.current = true;
@@ -649,7 +718,11 @@ export default function Home() {
             }
           }
 
-          if (shouldSeedHistory && cloudEmpty && !localHasData) {
+            if (!isDashboardStatsEmpty(cloudDashboard)) {
+              persistDashboardStats(cloudDashboard);
+            }
+
+            if (shouldSeedHistory && cloudEmpty && !localHasData) {
             cloudReadyRef.current = true;
             await pushCloudProgress();
           }
@@ -707,6 +780,7 @@ export default function Home() {
           practiceCorrect: statsRef.current.practiceCorrect,
           activity: statsRef.current.activity,
           solverHistory: normalizeSolverHistory(historyRef.current),
+          dashboardStats: normalizeDashboardStats(dashboardStatsRef.current),
           practiceProgress: {
             topic: practice.topic,
             index: practice.index,
@@ -947,6 +1021,7 @@ export default function Home() {
       recordActivity(`Solved: ${finalQuestion}`, {
         questionsSolvedDelta: 1,
       });
+      touchDashboardStreak();
 
       const updatedHistory = [
         {
@@ -1106,6 +1181,7 @@ export default function Home() {
       recordActivity("Solved a photo problem", {
         questionsSolvedDelta: 1,
       });
+      touchDashboardStreak();
 
       const updatedHistory = [
         {
@@ -1217,6 +1293,10 @@ export default function Home() {
             practiceAttemptedDelta: practiceCountedAttempt ? 0 : 1,
             practiceCorrectDelta: 1,
           });
+          recordPracticeDashboard({
+            attemptedDelta: practiceCountedAttempt ? 0 : 1,
+            correctDelta: 1,
+          });
         }
       } else {
         setPracticeWrongAttempts((count) => count + 1);
@@ -1225,6 +1305,9 @@ export default function Home() {
           setPracticeCountedAttempt(true);
           recordActivity("Practice answer incorrect", {
             practiceAttemptedDelta: 1,
+          });
+          recordPracticeDashboard({
+            attemptedDelta: 1,
           });
         }
       }
@@ -1772,6 +1855,22 @@ export default function Home() {
     : practiceQuestion
       ? `Question ${practiceIndex + 1} of ${PRACTICE_SET_SIZE}`
       : "No practice in progress";
+
+  const topicRanks = rankDashboardTopics(dashboardStats);
+  const strongestTopicLabel = topicRanks.strongest
+    ? PRACTICE_TOPICS.find((topic) => topic.id === topicRanks.strongest)
+        ?.label || "—"
+    : "—";
+  const weakestTopicLabel = topicRanks.weakest
+    ? PRACTICE_TOPICS.find((topic) => topic.id === topicRanks.weakest)?.label ||
+      "—"
+    : "—";
+  const streakLabel =
+    dashboardStats.streakCount > 0
+      ? dashboardStats.streakCount === 1
+        ? "1 day"
+        : `${dashboardStats.streakCount} days`
+      : "—";
 
   const solverLimitReached =
     !solverUnlimited && dailyUsed >= dailyLimit;
@@ -3547,6 +3646,18 @@ export default function Home() {
                 {
                   label: "Current Progress",
                   value: practiceProgressLabel,
+                },
+                {
+                  label: "Daily Streak",
+                  value: streakLabel,
+                },
+                {
+                  label: "Strongest Topic",
+                  value: strongestTopicLabel,
+                },
+                {
+                  label: "Weakest Topic",
+                  value: weakestTopicLabel,
                 },
               ].map((card) => (
                 <div

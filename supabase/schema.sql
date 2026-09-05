@@ -30,6 +30,7 @@ create table if not exists public.profiles (
   activity jsonb not null default '[]'::jsonb,
   practice_progress jsonb not null default '{}'::jsonb,
   solver_history jsonb not null default '[]'::jsonb,
+  dashboard_stats jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default timezone('utc', now())
 );
 

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getPlanDisplayName, resolveUserPlan } from "@/lib/plans";
-import { normalizeCloudProgress, normalizeSolverHistory } from "@/lib/progress";
+import {
+  normalizeCloudProgress,
+  normalizeDashboardStats,
+  normalizeSolverHistory,
+} from "@/lib/progress";
 import { getRequestUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
@@ -32,7 +36,7 @@ export async function GET(request: Request) {
   const { data, error } = await auth.supabase
     .from("profiles")
     .select(
-      "email, plan, student_level, practice_topic, questions_solved, practice_attempted, practice_correct, activity, practice_progress, solver_history, updated_at"
+      "email, plan, student_level, practice_topic, questions_solved, practice_attempted, practice_correct, activity, practice_progress, solver_history, dashboard_stats, updated_at"
     )
     .eq("id", auth.user.id)
     .maybeSingle();
@@ -75,6 +79,7 @@ export async function GET(request: Request) {
         activity: [],
         practice_progress: {},
         solver_history: [],
+        dashboard_stats: {},
       }),
     });
   }
@@ -138,6 +143,7 @@ export async function PUT(request: Request) {
       : {};
 
   const solverHistory = normalizeSolverHistory(body.solverHistory);
+  const dashboardStats = normalizeDashboardStats(body.dashboardStats);
 
   // Intentionally omit `plan` — clients must never set Free/Pro themselves.
   const payload = {
@@ -151,6 +157,7 @@ export async function PUT(request: Request) {
     activity,
     practice_progress: practiceProgress,
     solver_history: solverHistory,
+    dashboard_stats: dashboardStats,
     updated_at: new Date().toISOString(),
   };
 
@@ -158,7 +165,7 @@ export async function PUT(request: Request) {
     .from("profiles")
     .upsert(payload, { onConflict: "id" })
     .select(
-      "email, plan, student_level, practice_topic, questions_solved, practice_attempted, practice_correct, activity, practice_progress, solver_history"
+      "email, plan, student_level, practice_topic, questions_solved, practice_attempted, practice_correct, activity, practice_progress, solver_history, dashboard_stats"
     )
     .single();
 
