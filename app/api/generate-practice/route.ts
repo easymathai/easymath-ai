@@ -56,6 +56,24 @@ function getLevelStyleInstructions(level: StudentLevel): string {
   return styles[level];
 }
 
+type PracticeEase = -1 | 0 | 1;
+
+function parsePracticeEase(value: unknown): PracticeEase {
+  return value === -1 || value === 0 || value === 1 ? value : 0;
+}
+
+function getEaseInstructions(ease: PracticeEase): string {
+  if (ease === -1) {
+    return "Ease -1: slightly easier within this same Student Level. Use friendlier numbers and fewer steps. Do not drop to a lower Student Level.";
+  }
+
+  if (ease === 1) {
+    return "Ease +1: slightly more challenging within this same Student Level. Still school math for this level. Do not jump to a higher Student Level.";
+  }
+
+  return "Ease 0: normal current behavior for this Student Level.";
+}
+
 function getTopicInstructions(topic: PracticeTopic): string {
   const topics: Record<PracticeTopic, string> = {
     arithmetic: "Arithmetic: addition, subtraction, multiplication, division, and order of operations.",
@@ -156,6 +174,7 @@ export async function POST(request: Request) {
       : [];
     const level = parseStudentLevel(body.level);
     const topic = parsePracticeTopic(body.topic);
+    const ease = parsePracticeEase(body.ease);
     const count = Math.min(5, Math.max(1, Number(body.count) || 1));
 
     const avoid = [
@@ -173,6 +192,8 @@ You create EasyMath practice question${count > 1 ? "s" : ""}.
 Rules:
 - Topic: ${getTopicInstructions(topic)}
 - Difficulty: ${getLevelStyleInstructions(level)}
+- ${getEaseInstructions(ease)}
+- Student Level is authoritative. Ease may only nudge slightly inside that level. Never change Student Level.
 - If an original question is given, test the SAME mathematical concept unless the chosen topic clearly differs.
 - Use different numbers or values from the original and from any previous questions.
 - Do NOT repeat any question in the avoid list.

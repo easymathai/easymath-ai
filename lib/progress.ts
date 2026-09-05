@@ -253,6 +253,47 @@ export function rankDashboardTopics(
   };
 }
 
+export type PracticeDifficultyNudge = -1 | 0 | 1;
+
+/** Mild ease vs the current Student Level. Never changes the level itself. */
+export function practiceDifficultyNudge(
+  topicStats: CloudDashboardStats,
+  topic: string
+): PracticeDifficultyNudge {
+  if (topic === "mixed") {
+    return 0;
+  }
+
+  const normalized = normalizeDashboardStats(topicStats);
+
+  if (!DASHBOARD_TOPIC_SET.has(topic)) {
+    return 0;
+  }
+
+  const stat = normalized.topics[topic as DashboardTopicId];
+  const attempted = stat?.attempted || 0;
+
+  if (attempted < TOPIC_RANK_MIN_ATTEMPTS) {
+    return 0;
+  }
+
+  const accuracy = (stat?.correct || 0) / attempted;
+
+  if (accuracy < 0.4) {
+    return -1;
+  }
+
+  if (accuracy <= 0.8) {
+    return 0;
+  }
+
+  if (accuracy > 0.8 && attempted >= 5) {
+    return 1;
+  }
+
+  return 0;
+}
+
 export function normalizeSolverHistory(input: unknown): CloudSolverHistoryItem[] {
   if (!Array.isArray(input)) {
     return [];

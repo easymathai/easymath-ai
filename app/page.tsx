@@ -24,10 +24,12 @@ import {
   isDashboardStatsEmpty,
   normalizeDashboardStats,
   normalizeSolverHistory,
+  practiceDifficultyNudge,
   rankDashboardTopics,
   recordDashboardTopicAttempt,
   SOLVER_HISTORY_LIMIT,
   type CloudDashboardStats,
+  type PracticeDifficultyNudge,
 } from "@/lib/progress";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
@@ -1549,7 +1551,8 @@ export default function Home() {
 
   async function generatePracticeQuestions(
     count: number,
-    previousQuestions: string[]
+    previousQuestions: string[],
+    options?: { topic?: PracticeTopic; ease?: PracticeDifficultyNudge }
   ): Promise<{ questions: string[]; tokens: string[] }> {
     const sourceQuestion = getSourceMathQuestion(question, solution);
     const originalQuestion =
@@ -1570,8 +1573,9 @@ export default function Home() {
         previousQuestions,
         previousPracticeQuestion: previousQuestions[previousQuestions.length - 1] || "",
         level: studentLevel,
-        topic: practiceTopic,
+        topic: options?.topic ?? practiceTopic,
         count,
+        ...(options?.ease !== undefined ? { ease: options.ease } : {}),
       }),
     });
 
@@ -1628,7 +1632,7 @@ export default function Home() {
     return { questions, tokens };
   }
 
-  async function startPracticeSet() {
+  async function startPracticeSet(topicOverride?: PracticeTopic) {
     if (
       practiceGenerating ||
       practiceChecking ||
@@ -1639,6 +1643,17 @@ export default function Home() {
       return;
     }
 
+    const topicForSet = topicOverride ?? practiceTopic;
+
+    if (topicOverride) {
+      selectPracticeTopic(topicOverride);
+    }
+
+    const ease = practiceDifficultyNudge(
+      dashboardStatsRef.current,
+      topicForSet
+    );
+
     const requestId = practiceRequestRef.current + 1;
     practiceRequestRef.current = requestId;
     setPracticeGenerating(true);
@@ -1648,7 +1663,10 @@ export default function Home() {
     setPracticeCorrect(null);
 
     try {
-      const generated = await generatePracticeQuestions(PRACTICE_SET_SIZE, []);
+      const generated = await generatePracticeQuestions(PRACTICE_SET_SIZE, [], {
+        topic: topicForSet,
+        ease,
+      });
       const questions = generated.questions.slice(0, PRACTICE_SET_SIZE);
       const tokens = generated.tokens.slice(0, PRACTICE_SET_SIZE);
 
@@ -1666,7 +1684,7 @@ export default function Home() {
       setPracticeCompleted(false);
       setActivePracticeQuestion(questions[0] || "");
       recordActivity(
-        `Started ${PRACTICE_TOPICS.find((item) => item.id === practiceTopic)?.label || "practice"} set`
+        `Started ${PRACTICE_TOPICS.find((item) => item.id === topicForSet)?.label || "practice"} set`
       );
     } catch (error) {
       if (practiceRequestRef.current !== requestId) {
@@ -1857,6 +1875,13 @@ export default function Home() {
       : "No practice in progress";
 
   const topicRanks = rankDashboardTopics(dashboardStats);
+  const recommendedTopic =
+    topicRanks.weakest && topicRanks.weakest !== "mixed"
+      ? topicRanks.weakest
+      : null;
+  const recommendedTopicLabel = recommendedTopic
+    ? PRACTICE_TOPICS.find((topic) => topic.id === recommendedTopic)?.label || ""
+    : "";
   const strongestTopicLabel = topicRanks.strongest
     ? PRACTICE_TOPICS.find((topic) => topic.id === topicRanks.strongest)
         ?.label || "—"
@@ -2469,9 +2494,62 @@ export default function Home() {
                 })}
               </div>
 
+              {recommendedTopic && recommendedTopicLabel ? (
+                <div
+                  style={{
+                    marginTop: "12px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "10px",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div
+                    style={{
+                      color: theme.muted,
+                      fontSize: "13px",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Suggested practice: {recommendedTopicLabel}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        recommendedTopic &&
+                        isPracticeTopic(recommendedTopic)
+                      ) {
+                        void startPracticeSet(recommendedTopic);
+                      }
+                    }}
+                    disabled={
+                      practiceGenerating ||
+                      practiceChecking ||
+                      practiceRevealing ||
+                      loading ||
+                      imageLoading
+                    }
+                    style={{
+                      border: `1px solid ${theme.border}`,
+                      background: theme.buttonSoft,
+                      color: theme.text,
+                      padding: "8px 12px",
+                      borderRadius: "11px",
+                      fontWeight: 800,
+                      fontSize: "13px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Practice {recommendedTopicLabel}
+                  </button>
+                </div>
+              ) : null}
+
               <button
                 type="button"
-                onClick={startPracticeSet}
+                onClick={() => void startPracticeSet()}
                 disabled={
                   practiceGenerating ||
                   practiceChecking ||
@@ -3212,7 +3290,7 @@ export default function Home() {
                         </button>
                         <button
                           type="button"
-                          onClick={startPracticeSet}
+                          onClick={() => void startPracticeSet()}
                           disabled={practiceGenerating}
                           style={{
                             border: `1px solid ${theme.border}`,
