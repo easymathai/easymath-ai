@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getPlanDisplayName, resolveUserPlan } from "@/lib/plans";
-import { normalizeCloudProgress } from "@/lib/progress";
+import { normalizeCloudProgress, normalizeSolverHistory } from "@/lib/progress";
 import { getRequestUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
   const { data, error } = await auth.supabase
     .from("profiles")
     .select(
-      "email, plan, student_level, practice_topic, questions_solved, practice_attempted, practice_correct, activity, practice_progress, updated_at"
+      "email, plan, student_level, practice_topic, questions_solved, practice_attempted, practice_correct, activity, practice_progress, solver_history, updated_at"
     )
     .eq("id", auth.user.id)
     .maybeSingle();
@@ -74,6 +74,7 @@ export async function GET(request: Request) {
         practice_correct: 0,
         activity: [],
         practice_progress: {},
+        solver_history: [],
       }),
     });
   }
@@ -136,6 +137,8 @@ export async function PUT(request: Request) {
       ? body.practiceProgress
       : {};
 
+  const solverHistory = normalizeSolverHistory(body.solverHistory);
+
   // Intentionally omit `plan` — clients must never set Free/Pro themselves.
   const payload = {
     id: auth.user.id,
@@ -147,6 +150,7 @@ export async function PUT(request: Request) {
     practice_correct: Math.max(0, Number(body.practiceCorrect) || 0),
     activity,
     practice_progress: practiceProgress,
+    solver_history: solverHistory,
     updated_at: new Date().toISOString(),
   };
 
@@ -154,7 +158,7 @@ export async function PUT(request: Request) {
     .from("profiles")
     .upsert(payload, { onConflict: "id" })
     .select(
-      "email, plan, student_level, practice_topic, questions_solved, practice_attempted, practice_correct, activity, practice_progress"
+      "email, plan, student_level, practice_topic, questions_solved, practice_attempted, practice_correct, activity, practice_progress, solver_history"
     )
     .single();
 

@@ -17,6 +17,10 @@ import {
   resolveUserPlan,
   type UserPlan,
 } from "@/lib/plans";
+import {
+  normalizeSolverHistory,
+  SOLVER_HISTORY_LIMIT,
+} from "@/lib/progress";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   canUseLocalSolver,
@@ -27,6 +31,8 @@ import {
 type HistoryItem = {
   question: string;
   solution: string;
+  at?: string;
+  source?: "text" | "photo";
 };
 
 type StudentLevel = "primary" | "middle" | "high" | "advanced";
@@ -241,6 +247,7 @@ export default function Home() {
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cloudReadyRef = useRef(false);
   const statsRef = useRef(stats);
+  const historyRef = useRef(history);
   const levelRef = useRef(studentLevel);
   const topicRef = useRef(practiceTopic);
   const practiceSyncRef = useRef({
@@ -253,6 +260,7 @@ export default function Home() {
   });
   latestSolutionRef.current = solution;
   statsRef.current = stats;
+  historyRef.current = history;
   levelRef.current = studentLevel;
   topicRef.current = practiceTopic;
   practiceSyncRef.current = {
@@ -418,6 +426,7 @@ export default function Home() {
     practiceSet,
     practiceTokens,
     practiceCompleted,
+    history,
   ]);
 
   useEffect(() => {
@@ -551,6 +560,25 @@ export default function Home() {
         const progress = data.progress;
 
         if (progress) {
+          const cloudHistory = normalizeSolverHistory(progress.solverHistory);
+
+          if (cloudHistory.length > 0) {
+            historyRef.current = cloudHistory;
+            setHistory(cloudHistory);
+            try {
+              localStorage.setItem(
+                "easymath-history",
+                JSON.stringify(cloudHistory)
+              );
+            } catch {
+              // Safari private mode may block storage.
+            }
+          }
+
+          const shouldSeedHistory =
+            cloudHistory.length === 0 &&
+            normalizeSolverHistory(historyRef.current).length > 0;
+
           const cloudEmpty =
             Number(progress.questionsSolved) === 0 &&
             Number(progress.practiceAttempted) === 0 &&
@@ -620,6 +648,11 @@ export default function Home() {
               setPracticeCompleted(Boolean(pp.completed));
             }
           }
+
+          if (shouldSeedHistory && cloudEmpty && !localHasData) {
+            cloudReadyRef.current = true;
+            await pushCloudProgress();
+          }
         }
 
         if (typeof data.email === "string" && data.email) {
@@ -673,6 +706,7 @@ export default function Home() {
           practiceAttempted: statsRef.current.practiceAttempted,
           practiceCorrect: statsRef.current.practiceCorrect,
           activity: statsRef.current.activity,
+          solverHistory: normalizeSolverHistory(historyRef.current),
           practiceProgress: {
             topic: practice.topic,
             index: practice.index,
@@ -918,11 +952,13 @@ export default function Home() {
         {
           question: finalQuestion,
           solution: result,
+          at: new Date().toISOString(),
+          source: "text" as const,
         },
         ...history.filter(
           (item) => item.question !== finalQuestion
         ),
-      ].slice(0, 10);
+      ].slice(0, SOLVER_HISTORY_LIMIT);
 
       saveHistory(updatedHistory);
     } catch {
@@ -1075,9 +1111,11 @@ export default function Home() {
         {
           question: "📷 Math problem from photo",
           solution: result,
+          at: new Date().toISOString(),
+          source: "photo" as const,
         },
         ...history,
-      ].slice(0, 10);
+      ].slice(0, SOLVER_HISTORY_LIMIT);
 
       saveHistory(updatedHistory);
     } catch {
