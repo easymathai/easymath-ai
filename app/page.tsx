@@ -3785,9 +3785,7 @@ export default function Home() {
                                 ? "Creating question..."
                                 : practiceIndex + 1 >= PRACTICE_SET_SIZE
                                   ? "See Results"
-                                  : practiceSource === "recommended"
-                                    ? `Keep practising ${currentPracticeTopicLabel} →`
-                                    : "Next Question →"}
+                                  : "Next Question →"}
                             </button>
 
                             <button
