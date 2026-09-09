@@ -2634,19 +2634,6 @@ export default function Home() {
                       ? "Creating your practice..."
                       : `Practice ${recommendedTopicLabel}`}
                   </button>
-                  {practiceLaunchError && practiceSource === "recommended" ? (
-                    <div
-                      style={{
-                        marginTop: "8px",
-                        color: darkMode ? "#fda4af" : "#be123c",
-                        fontSize: "13px",
-                        fontWeight: 700,
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      {practiceLaunchError}
-                    </div>
-                  ) : null}
                 </div>
               ) : null}
 
