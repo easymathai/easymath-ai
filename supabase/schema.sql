@@ -132,6 +132,22 @@ create policy "daily_usage_select_own"
   to authenticated
   using (auth.uid() = user_id);
 
+-- One row per claimed Free-plan credit. Refunds require this reservation.
+create table if not exists public.solver_reservations (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  usage_date date not null,
+  status text not null default 'pending'
+    check (status in ('pending', 'released', 'committed')),
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+alter table public.solver_reservations enable row level security;
+
+revoke all on table public.solver_reservations from public;
+revoke all on table public.solver_reservations from anon;
+revoke all on table public.solver_reservations from authenticated;
+
 -- ---------------------------------------------------------------------------
 -- 3) Secure RPCs for Free-plan limit (server-side enforcement)
 -- ---------------------------------------------------------------------------
@@ -175,6 +191,7 @@ declare
   d date := (timezone('utc', now()))::date;
   current_count integer := 0;
   max_count integer := 10;
+  reservation_id uuid;
 begin
   if uid is null then
     raise exception 'Not authenticated';
@@ -202,17 +219,84 @@ begin
   set solver_count = current_count + 1
   where user_id = uid and usage_date = d;
 
+  insert into public.solver_reservations (user_id, usage_date, status)
+  values (uid, d, 'pending')
+  returning id into reservation_id;
+
   return json_build_object(
     'allowed', true,
     'used', current_count + 1,
+    'limit', max_count,
+    'usage_date', d,
+    'reservation_id', reservation_id
+  );
+end;
+$$;
+
+-- Final schema: no zero-argument release_solver_usage(). Drop it if a
+-- previous compatibility stage left the overload in place.
+drop function if exists public.release_solver_usage();
+
+-- Undo a pending claim when a solve fails after reservation (idempotent).
+create or replace function public.release_solver_usage(p_reservation_id uuid)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid uuid := auth.uid();
+  d date := (timezone('utc', now()))::date;
+  current_count integer := 0;
+  max_count integer := 10;
+  released_id uuid;
+  reservation_date date;
+begin
+  if uid is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  if p_reservation_id is not null then
+    update public.solver_reservations
+    set status = 'released'
+    where id = p_reservation_id
+      and user_id = uid
+      and status = 'pending'
+    returning id, usage_date into released_id, reservation_date;
+  end if;
+
+  if released_id is not null then
+    select coalesce(solver_count, 0) into current_count
+    from public.daily_usage
+    where user_id = uid and usage_date = reservation_date
+    for update;
+
+    if current_count is null then
+      current_count := 0;
+    end if;
+
+    if current_count > 0 then
+      update public.daily_usage
+      set solver_count = current_count - 1
+      where user_id = uid and usage_date = reservation_date;
+    end if;
+  end if;
+
+  select coalesce(solver_count, 0) into current_count
+  from public.daily_usage
+  where user_id = uid and usage_date = d;
+
+  return json_build_object(
+    'allowed', coalesce(current_count, 0) < max_count,
+    'used', coalesce(current_count, 0),
     'limit', max_count,
     'usage_date', d
   );
 end;
 $$;
 
--- Undo a claim when a solve fails after reservation (keeps Free plan fair).
-create or replace function public.release_solver_usage()
+-- Mark a successful solve so the reservation can never be refunded.
+create or replace function public.commit_solver_usage(p_reservation_id uuid)
 returns json
 language plpgsql
 security definer
@@ -228,26 +312,21 @@ begin
     raise exception 'Not authenticated';
   end if;
 
+  if p_reservation_id is not null then
+    update public.solver_reservations
+    set status = 'committed'
+    where id = p_reservation_id
+      and user_id = uid
+      and status = 'pending';
+  end if;
+
   select coalesce(solver_count, 0) into current_count
   from public.daily_usage
-  where user_id = uid and usage_date = d
-  for update;
-
-  if current_count is null then
-    current_count := 0;
-  end if;
-
-  if current_count > 0 then
-    update public.daily_usage
-    set solver_count = current_count - 1
-    where user_id = uid and usage_date = d;
-
-    current_count := current_count - 1;
-  end if;
+  where user_id = uid and usage_date = d;
 
   return json_build_object(
-    'allowed', current_count < max_count,
-    'used', current_count,
+    'allowed', coalesce(current_count, 0) < max_count,
+    'used', coalesce(current_count, 0),
     'limit', max_count,
     'usage_date', d
   );
@@ -255,11 +334,17 @@ end;
 $$;
 
 revoke all on function public.get_solver_usage() from public;
+revoke all on function public.get_solver_usage() from anon;
 revoke all on function public.claim_solver_usage() from public;
-revoke all on function public.release_solver_usage() from public;
+revoke all on function public.claim_solver_usage() from anon;
+revoke all on function public.release_solver_usage(uuid) from public;
+revoke all on function public.release_solver_usage(uuid) from anon;
+revoke all on function public.commit_solver_usage(uuid) from public;
+revoke all on function public.commit_solver_usage(uuid) from anon;
 grant execute on function public.get_solver_usage() to authenticated;
 grant execute on function public.claim_solver_usage() to authenticated;
-grant execute on function public.release_solver_usage() to authenticated;
+grant execute on function public.release_solver_usage(uuid) to authenticated;
+grant execute on function public.commit_solver_usage(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 4) Guest solver daily usage (signed HTTP-only cookie identity)

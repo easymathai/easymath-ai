@@ -252,8 +252,13 @@ export default function Home() {
   const [solverUnlimited, setSolverUnlimited] = useState(false);
   const [cloudEnabled] = useState(() => cloudAccountsAvailable());
   const [pricingOpen, setPricingOpen] = useState(false);
+  const [practiceSource, setPracticeSource] = useState<
+    "recommended" | "manual" | null
+  >(null);
+  const [practiceLaunchError, setPracticeLaunchError] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const practicePanelRef = useRef<HTMLDivElement>(null);
   const latestSolutionRef = useRef(solution);
   const latestPracticeQuestionRef = useRef("");
   const practiceRequestRef = useRef(0);
@@ -476,6 +481,8 @@ export default function Home() {
     setPracticeScoredCurrent(false);
     setPracticeCountedAttempt(false);
     setPracticeCompleted(false);
+    setPracticeSource(null);
+    setPracticeLaunchError("");
   }, [solution]);
 
   function saveHistory(items: HistoryItem[]) {
@@ -1470,12 +1477,23 @@ export default function Home() {
         method: "POST",
         headers,
         body: JSON.stringify({
-          originalQuestion: sourceQuestion || currentPractice,
+          originalQuestion:
+            practiceSource === "recommended"
+              ? currentPractice
+              : sourceQuestion || currentPractice,
           previousPracticeQuestion: currentPractice,
           previousQuestions: practiceSet,
           level: studentLevel,
           topic: practiceTopic,
           count: 1,
+          ...(practiceSource === "recommended"
+            ? {
+                ease: practiceDifficultyNudge(
+                  dashboardStatsRef.current,
+                  practiceTopic
+                ),
+              }
+            : {}),
         }),
       });
 
@@ -1552,12 +1570,17 @@ export default function Home() {
   async function generatePracticeQuestions(
     count: number,
     previousQuestions: string[],
-    options?: { topic?: PracticeTopic; ease?: PracticeDifficultyNudge }
+    options?: {
+      topic?: PracticeTopic;
+      ease?: PracticeDifficultyNudge;
+      topicFocused?: boolean;
+    }
   ): Promise<{ questions: string[]; tokens: string[] }> {
     const sourceQuestion = getSourceMathQuestion(question, solution);
-    const originalQuestion =
-      sourceQuestion &&
-      sourceQuestion !== "Math problem from uploaded photo"
+    const originalQuestion = options?.topicFocused
+      ? ""
+      : sourceQuestion &&
+          sourceQuestion !== "Math problem from uploaded photo"
         ? sourceQuestion
         : detectedProblem || "";
 
@@ -1632,7 +1655,17 @@ export default function Home() {
     return { questions, tokens };
   }
 
-  async function startPracticeSet(topicOverride?: PracticeTopic) {
+  function scrollToPracticePanel() {
+    practicePanelRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
+
+  async function startPracticeSet(
+    topicOverride?: PracticeTopic,
+    fromRecommendation = false
+  ) {
     if (
       practiceGenerating ||
       practiceChecking ||
@@ -1656,16 +1689,25 @@ export default function Home() {
 
     const requestId = practiceRequestRef.current + 1;
     practiceRequestRef.current = requestId;
-    setPracticeGenerating(true);
+    setPracticeSource(fromRecommendation ? "recommended" : "manual");
+    setPracticeLaunchError("");
+    resetPracticeState();
+    setPracticeSet([]);
+    setPracticeTokens([]);
+    setPracticeIndex(0);
+    setPracticeScore(0);
+    setPracticeScoredCurrent(false);
+    setPracticeCountedAttempt(false);
     setPracticeCompleted(false);
-    setPracticeFeedback("");
-    setPracticeHint("");
-    setPracticeCorrect(null);
+    setActivePracticeQuestion("");
+    setPracticeGenerating(true);
+    scrollToPracticePanel();
 
     try {
       const generated = await generatePracticeQuestions(PRACTICE_SET_SIZE, [], {
         topic: topicForSet,
         ease,
+        ...(fromRecommendation ? { topicFocused: true } : {}),
       });
       const questions = generated.questions.slice(0, PRACTICE_SET_SIZE);
       const tokens = generated.tokens.slice(0, PRACTICE_SET_SIZE);
@@ -1686,18 +1728,21 @@ export default function Home() {
       recordActivity(
         `Started ${PRACTICE_TOPICS.find((item) => item.id === topicForSet)?.label || "practice"} set`
       );
+      scrollToPracticePanel();
     } catch (error) {
       if (practiceRequestRef.current !== requestId) {
         return;
       }
 
-      setPracticeCorrect(null);
-      setPracticeHint("");
-      setPracticeFeedback(
+      const launchError =
         error instanceof Error
           ? error.message
-          : "We couldn't start practice. Please try again."
-      );
+          : "We couldn't start practice. Please try again.";
+
+      setPracticeCorrect(null);
+      setPracticeHint("");
+      setPracticeFeedback(launchError);
+      setPracticeLaunchError(launchError);
     } finally {
       if (practiceRequestRef.current === requestId) {
         setPracticeGenerating(false);
@@ -1752,7 +1797,11 @@ export default function Home() {
     setPracticeGenerating(true);
 
     try {
-      const generated = await generatePracticeQuestions(1, currentList);
+      const generated = await generatePracticeQuestions(1, currentList, {
+        topic: practiceTopic,
+        ease: practiceDifficultyNudge(dashboardStatsRef.current, practiceTopic),
+        ...(practiceSource === "recommended" ? { topicFocused: true } : {}),
+      });
 
       if (practiceRequestRef.current !== requestId) {
         return;
@@ -1859,7 +1908,7 @@ export default function Home() {
   const practiceQuestion =
     (practiceSet[practiceIndex] || "").trim() ||
     activePracticeQuestion.trim() ||
-    parsedPracticeQuestion;
+    (practiceGenerating || practiceLaunchError ? "" : parsedPracticeQuestion);
 
   latestPracticeQuestionRef.current = practiceQuestion;
 
@@ -1882,6 +1931,11 @@ export default function Home() {
   const recommendedTopicLabel = recommendedTopic
     ? PRACTICE_TOPICS.find((topic) => topic.id === recommendedTopic)?.label || ""
     : "";
+  const currentPracticeTopicLabel =
+    PRACTICE_TOPICS.find((topic) => topic.id === practiceTopic)?.label ||
+    "this topic";
+  const recommendedBusy =
+    practiceGenerating && practiceSource === "recommended";
   const strongestTopicLabel = topicRanks.strongest
     ? PRACTICE_TOPICS.find((topic) => topic.id === topicRanks.strongest)
         ?.label || "—"
@@ -1909,7 +1963,12 @@ export default function Home() {
   useEffect(() => {
     const seedQuestion = solverPracticeQuestion || parsedPracticeQuestion;
 
-    if (!seedQuestion || practiceCompleted) {
+    if (
+      !seedQuestion ||
+      practiceCompleted ||
+      practiceGenerating ||
+      practiceLaunchError
+    ) {
       return;
     }
 
@@ -1926,7 +1985,22 @@ export default function Home() {
     practiceSet.length,
     solverPracticeToken,
     solverPracticeQuestion,
+    practiceGenerating,
+    practiceLaunchError,
   ]);
+
+  useEffect(() => {
+    if (practiceSource !== "recommended") {
+      return;
+    }
+
+    if (practiceGenerating || practiceLaunchError) {
+      practicePanelRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
+  }, [practiceGenerating, practiceLaunchError, practiceSource]);
 
   const theme = useMemo(
     () => ({
@@ -2466,7 +2540,11 @@ export default function Home() {
                       disabled={
                         practiceGenerating ||
                         practiceChecking ||
-                        practiceRevealing
+                        practiceRevealing ||
+                        (practiceSource === "recommended" &&
+                          (practiceCompleted ||
+                            Boolean(practiceQuestion) ||
+                            Boolean(practiceLaunchError)))
                       }
                       style={{
                         border: selected
@@ -2498,11 +2576,6 @@ export default function Home() {
                 <div
                   style={{
                     marginTop: "12px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "10px",
-                    flexWrap: "wrap",
                   }}
                 >
                   <div
@@ -2510,18 +2583,30 @@ export default function Home() {
                       color: theme.muted,
                       fontSize: "13px",
                       fontWeight: 700,
+                      marginBottom: "8px",
                     }}
                   >
-                    Suggested practice: {recommendedTopicLabel}
+                    Recommended for you
                   </div>
                   <button
                     type="button"
                     onClick={() => {
                       if (
+                        recommendedBusy ||
+                        practiceGenerating ||
+                        practiceChecking ||
+                        practiceRevealing ||
+                        loading ||
+                        imageLoading
+                      ) {
+                        return;
+                      }
+
+                      if (
                         recommendedTopic &&
                         isPracticeTopic(recommendedTopic)
                       ) {
-                        void startPracticeSet(recommendedTopic);
+                        void startPracticeSet(recommendedTopic, true);
                       }
                     }}
                     disabled={
@@ -2532,18 +2617,37 @@ export default function Home() {
                       imageLoading
                     }
                     style={{
-                      border: `1px solid ${theme.border}`,
-                      background: theme.buttonSoft,
-                      color: theme.text,
-                      padding: "8px 12px",
-                      borderRadius: "11px",
+                      width: "100%",
+                      border: "none",
+                      background: recommendedBusy
+                        ? "#86efac"
+                        : "linear-gradient(135deg,#16a34a,#15803d)",
+                      color: "white",
+                      padding: "11px 16px",
+                      borderRadius: "12px",
                       fontWeight: 800,
-                      fontSize: "13px",
-                      cursor: "pointer",
+                      fontSize: "14px",
+                      cursor: recommendedBusy ? "wait" : "pointer",
+                      boxShadow: "0 8px 16px rgba(22,163,74,0.22)",
                     }}
                   >
-                    Practice {recommendedTopicLabel}
+                    {recommendedBusy
+                      ? "Creating your practice..."
+                      : `Practice ${recommendedTopicLabel}`}
                   </button>
+                  {practiceLaunchError && practiceSource === "recommended" ? (
+                    <div
+                      style={{
+                        marginTop: "8px",
+                        color: darkMode ? "#fda4af" : "#be123c",
+                        fontSize: "13px",
+                        fontWeight: 700,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {practiceLaunchError}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -3205,8 +3309,10 @@ export default function Home() {
               !imageLoading &&
               (practiceCompleted ||
                 practiceQuestion ||
-                practiceGenerating) && (
+                practiceGenerating ||
+                Boolean(practiceLaunchError)) && (
                 <div
+                  ref={practicePanelRef}
                   style={{
                     marginTop: "22px",
                     padding: "20px 22px",
@@ -3225,7 +3331,11 @@ export default function Home() {
                       flexWrap: "wrap",
                     }}
                   >
-                    <strong>🎯 YOUR TURN</strong>
+                    <strong>
+                      {practiceSource === "recommended"
+                        ? `🎯 YOUR TURN · ${currentPracticeTopicLabel}`
+                        : "🎯 YOUR TURN"}
+                    </strong>
                     <div
                       style={{
                         fontWeight: 800,
@@ -3235,6 +3345,8 @@ export default function Home() {
                     >
                       {practiceCompleted
                         ? "Practice complete"
+                        : practiceLaunchError && !practiceQuestion
+                          ? "Couldn't start yet"
                         : `Question ${practiceIndex + 1} of ${PRACTICE_SET_SIZE} · Score ${practiceScore}/${PRACTICE_SET_SIZE}`}
                     </div>
                   </div>
@@ -3258,7 +3370,9 @@ export default function Home() {
                           lineHeight: 1.6,
                         }}
                       >
-                        {practiceScore === PRACTICE_SET_SIZE
+                        {practiceSource === "recommended"
+                          ? `Keep practising ${currentPracticeTopicLabel} with another set.`
+                          : practiceScore === PRACTICE_SET_SIZE
                           ? "Perfect set — excellent work."
                           : practiceScore >= 3
                             ? "Nice progress. Try another set to keep building."
@@ -3272,21 +3386,81 @@ export default function Home() {
                           marginTop: "16px",
                         }}
                       >
+                        {practiceSource === "recommended" ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (
+                                practiceGenerating ||
+                                practiceChecking ||
+                                practiceRevealing ||
+                                loading ||
+                                imageLoading
+                              ) {
+                                return;
+                              }
+
+                              void startPracticeSet(practiceTopic, true);
+                            }}
+                            disabled={
+                              practiceGenerating ||
+                              practiceChecking ||
+                              practiceRevealing ||
+                              loading ||
+                              imageLoading
+                            }
+                            style={{
+                              border: "none",
+                              background: practiceGenerating
+                                ? "#86efac"
+                                : "linear-gradient(135deg,#16a34a,#15803d)",
+                              color: "white",
+                              padding: "11px 17px",
+                              borderRadius: "11px",
+                              fontWeight: 800,
+                              cursor: practiceGenerating ? "wait" : "pointer",
+                            }}
+                          >
+                            {practiceGenerating
+                              ? "Creating your practice..."
+                              : `Practice ${currentPracticeTopicLabel}`}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={restartCurrentPracticeSet}
+                            style={{
+                              border: "none",
+                              background:
+                                "linear-gradient(135deg,#7c3aed,#6d28d9)",
+                              color: "white",
+                              padding: "11px 17px",
+                              borderRadius: "11px",
+                              fontWeight: 800,
+                              cursor: "pointer",
+                            }}
+                          >
+                            Practice Again
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={restartCurrentPracticeSet}
                           style={{
-                            border: "none",
-                            background:
-                              "linear-gradient(135deg,#7c3aed,#6d28d9)",
-                            color: "white",
+                            border: `1px solid ${theme.border}`,
+                            background: theme.buttonSoft,
+                            color: theme.text,
                             padding: "11px 17px",
                             borderRadius: "11px",
                             fontWeight: 800,
                             cursor: "pointer",
+                            display:
+                              practiceSource === "recommended"
+                                ? "inline-flex"
+                                : "none",
                           }}
                         >
-                          Practice Again
+                          Retry this set
                         </button>
                         <button
                           type="button"
@@ -3319,9 +3493,84 @@ export default function Home() {
                           }}
                         >
                           <span className="easymath-spinner" aria-hidden="true" />
-                          Creating your practice questions…
+                          {practiceSource === "recommended"
+                            ? "Creating your recommended practice…"
+                            : "Creating your practice questions…"}
                         </div>
                       )}
+
+                      {practiceLaunchError &&
+                        !practiceQuestion &&
+                        !practiceGenerating && (
+                          <div
+                            style={{
+                              marginTop: "14px",
+                            }}
+                          >
+                            <div
+                              style={{
+                                padding: "14px 16px",
+                                borderRadius: "12px",
+                                background: darkMode ? "#4c0519" : "#ffe4e6",
+                                border: "1px solid #fb7185",
+                                fontWeight: 700,
+                                lineHeight: 1.6,
+                              }}
+                            >
+                              {practiceLaunchError}
+                            </div>
+                            {practiceSource === "recommended" &&
+                            recommendedTopic &&
+                            recommendedTopicLabel ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (
+                                    practiceGenerating ||
+                                    practiceChecking ||
+                                    practiceRevealing ||
+                                    loading ||
+                                    imageLoading
+                                  ) {
+                                    return;
+                                  }
+
+                                  if (isPracticeTopic(recommendedTopic)) {
+                                    void startPracticeSet(
+                                      recommendedTopic,
+                                      true
+                                    );
+                                  }
+                                }}
+                                disabled={
+                                  practiceGenerating ||
+                                  practiceChecking ||
+                                  practiceRevealing ||
+                                  loading ||
+                                  imageLoading
+                                }
+                                style={{
+                                  marginTop: "12px",
+                                  border: "none",
+                                  background: practiceGenerating
+                                    ? "#86efac"
+                                    : "linear-gradient(135deg,#16a34a,#15803d)",
+                                  color: "white",
+                                  padding: "11px 17px",
+                                  borderRadius: "11px",
+                                  fontWeight: 800,
+                                  cursor: practiceGenerating
+                                    ? "wait"
+                                    : "pointer",
+                                }}
+                              >
+                                {practiceGenerating
+                                  ? "Creating your practice..."
+                                  : `Practice ${recommendedTopicLabel}`}
+                              </button>
+                            ) : null}
+                          </div>
+                        )}
 
                       {practiceQuestion && (
                         <>
@@ -3536,7 +3785,9 @@ export default function Home() {
                                 ? "Creating question..."
                                 : practiceIndex + 1 >= PRACTICE_SET_SIZE
                                   ? "See Results"
-                                  : "Next Question →"}
+                                  : practiceSource === "recommended"
+                                    ? `Keep practising ${currentPracticeTopicLabel} →`
+                                    : "Next Question →"}
                             </button>
 
                             <button

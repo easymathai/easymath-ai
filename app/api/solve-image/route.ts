@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import {
+  commitSolverReservation,
   enforceLoggedInSolverLimit,
   releaseSolverReservation,
   type SolverGateSuccess,
@@ -336,6 +337,8 @@ export async function POST(request: Request) {
     }
 
     const gate: SolverGateSuccess = enforced;
+    let transcription = "";
+    let solution = "";
 
     try {
       const imageDataUrl = `data:${prepared.mimeType};base64,${prepared.imageBuffer.toString("base64")}`;
@@ -361,7 +364,7 @@ export async function POST(request: Request) {
         ],
       });
 
-      const transcription = extractTranscription(
+      transcription = extractTranscription(
         getOutputText(transcriptionResponse)
       );
 
@@ -384,7 +387,7 @@ ${getLevelStyleInstructions(level)}
         input: `Solve this exact transcription from the photo. Do not change it.\n\n${transcription}\n\nPut the transcription only as the first step-by-step line, in the form: 1. Read from photo: ${transcription}`,
       });
 
-      const solution = getOutputText(response);
+      solution = getOutputText(response);
 
       if (!solution || !solution.trim()) {
         await releaseSolverReservation(gate);
@@ -396,27 +399,6 @@ ${getLevelStyleInstructions(level)}
           gate.guestCookieToSet
         );
       }
-
-      const practiceQuestion = extractPracticeQuestion(solution);
-      const issued = await signPracticeQuestions(
-        request,
-        practiceQuestion ? [practiceQuestion] : []
-      );
-
-      return attachGuestCookie(
-        jsonWithPracticeCookie(
-          {
-            solution,
-            transcription,
-            usage: gate.usage,
-            practiceQuestion: practiceQuestion || null,
-            practiceToken:
-              issued.ok && issued.tokens[0] ? issued.tokens[0] : null,
-          },
-          issued.ok ? issued.guestSidToSet : null
-        ),
-        gate.guestCookieToSet
-      );
     } catch (error) {
       await releaseSolverReservation(gate);
       console.error("solve-image error:", error);
@@ -429,6 +411,42 @@ ${getLevelStyleInstructions(level)}
         gate.guestCookieToSet
       );
     }
+
+    // Valid solution: credit stays consumed. Never release after this point.
+    await commitSolverReservation(gate);
+
+    let practiceQuestion = "";
+    let practiceToken: string | null = null;
+    let practiceGuestSid: string | null = null;
+
+    try {
+      practiceQuestion = extractPracticeQuestion(solution);
+      const issued = await signPracticeQuestions(
+        request,
+        practiceQuestion ? [practiceQuestion] : []
+      );
+
+      if (issued.ok) {
+        practiceToken = issued.tokens[0] || null;
+        practiceGuestSid = issued.guestSidToSet;
+      }
+    } catch (error) {
+      console.error("solve-image practice token error:", error);
+    }
+
+    return attachGuestCookie(
+      jsonWithPracticeCookie(
+        {
+          solution,
+          transcription,
+          usage: gate.usage ?? null,
+          practiceQuestion: practiceQuestion || null,
+          practiceToken,
+        },
+        practiceGuestSid
+      ),
+      gate.guestCookieToSet
+    );
   } catch (error) {
     console.error("solve-image error:", error);
 

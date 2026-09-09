@@ -111,6 +111,10 @@ export type ClaimUsageResult = {
   limit: number;
 };
 
+export type SignedInClaimResult = ClaimUsageResult & {
+  reservationId: string | null;
+};
+
 function parseUsagePayload(data: unknown): ClaimUsageResult {
   const payload = (data || {}) as {
     allowed?: boolean;
@@ -125,9 +129,32 @@ function parseUsagePayload(data: unknown): ClaimUsageResult {
   };
 }
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function parseReservationId(data: unknown): string | null {
+  const payload = (data || {}) as {
+    reservation_id?: unknown;
+  };
+
+  if (typeof payload.reservation_id !== "string") {
+    return null;
+  }
+
+  const id = payload.reservation_id.trim();
+  return UUID_PATTERN.test(id) ? id : null;
+}
+
+function parseSignedInClaim(data: unknown): SignedInClaimResult {
+  return {
+    ...parseUsagePayload(data),
+    reservationId: parseReservationId(data),
+  };
+}
+
 export async function claimSolverUsage(
   supabase: SupabaseClient
-): Promise<ClaimUsageResult | null> {
+): Promise<SignedInClaimResult | null> {
   const { data, error } = await supabase.rpc("claim_solver_usage");
 
   if (error || !data) {
@@ -135,16 +162,35 @@ export async function claimSolverUsage(
     return null;
   }
 
-  return parseUsagePayload(data);
+  return parseSignedInClaim(data);
 }
 
 export async function releaseSolverUsage(
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  reservationId: string
 ): Promise<ClaimUsageResult | null> {
-  const { data, error } = await supabase.rpc("release_solver_usage");
+  const { data, error } = await supabase.rpc("release_solver_usage", {
+    p_reservation_id: reservationId,
+  });
 
   if (error || !data) {
     console.error("release_solver_usage error:", error);
+    return null;
+  }
+
+  return parseUsagePayload(data);
+}
+
+export async function commitSolverUsage(
+  supabase: SupabaseClient,
+  reservationId: string
+): Promise<ClaimUsageResult | null> {
+  const { data, error } = await supabase.rpc("commit_solver_usage", {
+    p_reservation_id: reservationId,
+  });
+
+  if (error || !data) {
+    console.error("commit_solver_usage error:", error);
     return null;
   }
 

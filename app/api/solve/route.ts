@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  commitSolverReservation,
   enforceLoggedInSolverLimit,
   releaseSolverReservation,
   type SolverGateSuccess,
@@ -34,9 +35,10 @@ export async function POST(request: Request) {
     }
 
     const gate: SolverGateSuccess = enforced;
+    let solution = "";
 
     try {
-      const solution = await solveTextQuestion(question, level);
+      solution = await solveTextQuestion(question, level);
 
       if (!solution.trim()) {
         await releaseSolverReservation(gate);
@@ -49,26 +51,6 @@ export async function POST(request: Request) {
           gate.guestCookieToSet
         );
       }
-
-      const practiceQuestion = extractPracticeQuestion(solution);
-      const issued = await signPracticeQuestions(
-        request,
-        practiceQuestion ? [practiceQuestion] : []
-      );
-
-      return attachGuestCookie(
-        jsonWithPracticeCookie(
-          {
-            solution,
-            usage: gate.usage ?? null,
-            practiceQuestion: practiceQuestion || null,
-            practiceToken:
-              issued.ok && issued.tokens[0] ? issued.tokens[0] : null,
-          },
-          issued.ok ? issued.guestSidToSet : null
-        ),
-        gate.guestCookieToSet
-      );
     } catch (error) {
       await releaseSolverReservation(gate);
 
@@ -82,6 +64,41 @@ export async function POST(request: Request) {
         gate.guestCookieToSet
       );
     }
+
+    // Valid solution: credit stays consumed. Never release after this point.
+    await commitSolverReservation(gate);
+
+    let practiceQuestion = "";
+    let practiceToken: string | null = null;
+    let practiceGuestSid: string | null = null;
+
+    try {
+      practiceQuestion = extractPracticeQuestion(solution);
+      const issued = await signPracticeQuestions(
+        request,
+        practiceQuestion ? [practiceQuestion] : []
+      );
+
+      if (issued.ok) {
+        practiceToken = issued.tokens[0] || null;
+        practiceGuestSid = issued.guestSidToSet;
+      }
+    } catch (error) {
+      console.error("EasyMath AI practice token error:", error);
+    }
+
+    return attachGuestCookie(
+      jsonWithPracticeCookie(
+        {
+          solution,
+          usage: gate.usage ?? null,
+          practiceQuestion: practiceQuestion || null,
+          practiceToken,
+        },
+        practiceGuestSid
+      ),
+      gate.guestCookieToSet
+    );
   } catch (error) {
     console.error("EasyMath AI API error:", error);
 
