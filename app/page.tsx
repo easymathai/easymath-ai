@@ -2542,9 +2542,8 @@ export default function Home() {
                         practiceChecking ||
                         practiceRevealing ||
                         (practiceSource === "recommended" &&
-                          (practiceCompleted ||
-                            Boolean(practiceQuestion) ||
-                            Boolean(practiceLaunchError)))
+                          Boolean(practiceQuestion) &&
+                          !practiceCompleted)
                       }
                       style={{
                         border: selected
