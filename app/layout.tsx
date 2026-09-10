@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -14,8 +14,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "EasyMath AI",
-  description: "Your Personal AI Math Tutor",
+  title: "EasyMath AI – Your Personal AI Math Tutor",
+  description:
+    "AI-powered math tutor that helps students solve problems and understand every step.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({

@@ -151,12 +151,65 @@ function studentFriendlyError(message: unknown, fallback: string): string {
       "Practice solutions are temporarily unavailable. Please try again later.",
     "Unable to read the math in this photo.":
       "We couldn't read the math in this photo. Try a clearer picture.",
+    "Unable to convert this iPhone photo. Please try another photo.":
+      "We couldn't read that iPhone photo. Please try another picture.",
+    "Unable to load your progress right now.":
+      "We couldn't load your saved progress. Please try again.",
+    "Unable to save your progress right now.":
+      "We couldn't save your progress just now. Please try again.",
     "Something went wrong.":
       "Something went wrong. Please try again.",
     [DAILY_LIMIT_MESSAGE]: DAILY_LIMIT_MESSAGE,
   };
 
-  return known[message] || message;
+  if (known[message]) {
+    return known[message];
+  }
+
+  const lower = message.toLowerCase();
+
+  if (
+    message.includes("{") ||
+    message.length > 180 ||
+    lower.includes("supabase") ||
+    lower.includes("openai") ||
+    lower.includes("api key") ||
+    lower.includes("stack") ||
+    lower.includes("internal server") ||
+    lower.includes("jwt")
+  ) {
+    return fallback;
+  }
+
+  return message;
+}
+
+function friendlyAuthError(message: unknown, fallback: string): string {
+  if (typeof message !== "string" || !message.trim()) {
+    return fallback;
+  }
+
+  const lower = message.toLowerCase();
+
+  if (lower.includes("invalid login") || lower.includes("invalid credentials")) {
+    return "That email or password doesn't look right. Please try again.";
+  }
+
+  if (
+    lower.includes("already registered") ||
+    lower.includes("already been registered")
+  ) {
+    return "That email already has an account. Try logging in.";
+  }
+
+  if (lower.includes("rate") || lower.includes("too many")) {
+    return "Too many attempts. Please wait a moment and try again.";
+  }
+
+  return studentFriendlyError(
+    message,
+    fallback
+  );
 }
 
 function parseSolution(text: string) {
@@ -282,6 +335,12 @@ export default function Home() {
   const latestSolutionRef = useRef(solution);
   const latestPracticeQuestionRef = useRef("");
   const practiceRequestRef = useRef(0);
+  const solverBusyRef = useRef(false);
+  const practiceLaunchBusyRef = useRef(false);
+  const practiceCheckBusyRef = useRef(false);
+  const practiceNavBusyRef = useRef(false);
+  const reviewCheckBusyRef = useRef(false);
+  const authBusyRef = useRef(false);
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cloudReadyRef = useRef(false);
   const statsRef = useRef(stats);
@@ -864,9 +923,13 @@ export default function Home() {
   }
 
   async function handleAuthSubmit() {
+    if (authBusyRef.current || authBusy) {
+      return;
+    }
+
     if (!cloudEnabled) {
       setAuthMessage(
-        "Cloud accounts are not set up yet. Add your Supabase environment variables to enable sign up and login."
+        "Cloud accounts aren't available yet. You can still use EasyMath on this device."
       );
       return;
     }
@@ -875,7 +938,7 @@ export default function Home() {
 
     if (!supabase) {
       setAuthMessage(
-        "Cloud accounts are not set up yet. Add your Supabase environment variables first."
+        "Cloud accounts aren't available yet. You can still use EasyMath on this device."
       );
       return;
     }
@@ -893,6 +956,7 @@ export default function Home() {
       return;
     }
 
+    authBusyRef.current = true;
     setAuthBusy(true);
     setAuthMessage("");
 
@@ -904,7 +968,12 @@ export default function Home() {
         });
 
         if (error) {
-          setAuthMessage(error.message);
+          setAuthMessage(
+            friendlyAuthError(
+              error.message,
+              "We couldn't create that account. Please try again."
+            )
+          );
           return;
         }
 
@@ -915,7 +984,7 @@ export default function Home() {
           setAccountOpen(true);
         } else {
           setAuthMessage(
-            "Account created. Check your email to confirm your address if confirmation is enabled, then log in."
+            "Account created. Check your email if you need to confirm it, then log in."
           );
           setAuthMode("login");
         }
@@ -926,7 +995,12 @@ export default function Home() {
         });
 
         if (error) {
-          setAuthMessage(error.message);
+          setAuthMessage(
+            friendlyAuthError(
+              error.message,
+              "We couldn't log you in. Please try again."
+            )
+          );
           return;
         }
 
@@ -938,6 +1012,7 @@ export default function Home() {
     } catch {
       setAuthMessage("Unable to reach the account service. Please try again.");
     } finally {
+      authBusyRef.current = false;
       setAuthBusy(false);
     }
   }
@@ -1010,7 +1085,7 @@ export default function Home() {
       return;
     }
 
-    if (loading || imageLoading) {
+    if (solverBusyRef.current || loading || imageLoading) {
       return;
     }
 
@@ -1018,6 +1093,7 @@ export default function Home() {
       return;
     }
 
+    solverBusyRef.current = true;
     setQuestion(finalQuestion);
     setLoading(true);
     setSolution("");
@@ -1106,6 +1182,7 @@ export default function Home() {
     } catch {
       setSolution("We couldn't reach EasyMath AI. Please check your connection and try again.");
     } finally {
+      solverBusyRef.current = false;
       setLoading(false);
     }
   }
@@ -1157,7 +1234,7 @@ export default function Home() {
       return;
     }
 
-    if (imageLoading || loading) {
+    if (solverBusyRef.current || imageLoading || loading) {
       return;
     }
 
@@ -1165,6 +1242,7 @@ export default function Home() {
       return;
     }
 
+    solverBusyRef.current = true;
     setImageLoading(true);
     setSolution("");
     setSolverPracticeToken("");
@@ -1266,12 +1344,13 @@ export default function Home() {
         "We couldn't reach the photo solver. Please check your connection and try again."
       );
     } finally {
+      solverBusyRef.current = false;
       setImageLoading(false);
     }
   }
 
   async function checkPracticeAnswer() {
-    if (!practiceQuestion.trim() || practiceChecking) {
+    if (!practiceQuestion.trim() || practiceChecking || practiceCheckBusyRef.current) {
       return;
     }
 
@@ -1290,6 +1369,7 @@ export default function Home() {
       return;
     }
 
+    practiceCheckBusyRef.current = true;
     setPracticeChecking(true);
     setPracticeFeedback("");
     setPracticeHint("");
@@ -1399,6 +1479,7 @@ export default function Home() {
         "We couldn't check that answer. Please try again."
       );
     } finally {
+      practiceCheckBusyRef.current = false;
       if (
         latestSolutionRef.current === solutionWhenChecked &&
         latestPracticeQuestionRef.current === practiceWhenChecked
@@ -1468,6 +1549,7 @@ export default function Home() {
     if (
       !current ||
       reviewChecking ||
+      reviewCheckBusyRef.current ||
       reviewCompleted ||
       practiceGenerating ||
       loading ||
@@ -1490,6 +1572,8 @@ export default function Home() {
 
     const questionWhenChecked = current.question;
     const mistakeId = current.id;
+
+    reviewCheckBusyRef.current = true;
 
     try {
       const response = await fetch("/api/check-practice", {
@@ -1550,6 +1634,7 @@ export default function Home() {
       setReviewHint("");
       setReviewFeedback("We couldn't check that answer. Please try again.");
     } finally {
+      reviewCheckBusyRef.current = false;
       if (questionWhenChecked === reviewQueue[reviewIndex]?.question) {
         setReviewChecking(false);
       }
@@ -1876,6 +1961,7 @@ export default function Home() {
     fromRecommendation = false
   ) {
     if (
+      practiceLaunchBusyRef.current ||
       practiceGenerating ||
       practiceChecking ||
       practiceRevealing ||
@@ -1884,6 +1970,8 @@ export default function Home() {
     ) {
       return;
     }
+
+    practiceLaunchBusyRef.current = true;
 
     const topicForSet = topicOverride ?? practiceTopic;
 
@@ -1953,6 +2041,7 @@ export default function Home() {
       setPracticeFeedback(launchError);
       setPracticeLaunchError(launchError);
     } finally {
+      practiceLaunchBusyRef.current = false;
       if (practiceRequestRef.current === requestId) {
         setPracticeGenerating(false);
       }
@@ -1961,6 +2050,7 @@ export default function Home() {
 
   async function goToNextPracticeQuestion() {
     if (
+      practiceNavBusyRef.current ||
       practiceGenerating ||
       practiceChecking ||
       practiceRevealing ||
@@ -1971,6 +2061,9 @@ export default function Home() {
       return;
     }
 
+    practiceNavBusyRef.current = true;
+
+    try {
     const currentList =
       practiceSet.length > 0
         ? practiceSet
@@ -2052,6 +2145,9 @@ export default function Home() {
       if (practiceRequestRef.current === requestId) {
         setPracticeGenerating(false);
       }
+    }
+    } finally {
+      practiceNavBusyRef.current = false;
     }
   }
 
@@ -2277,6 +2373,7 @@ export default function Home() {
     >
       <style>{`
         .easymath-app, .easymath-app * { box-sizing: border-box; }
+        .easymath-app { overflow-x: hidden; }
         .easymath-app button,
         .easymath-app textarea,
         .easymath-app input {
@@ -2312,6 +2409,9 @@ export default function Home() {
           .easymath-h2 {
             font-size: 24px !important;
           }
+          .easymath-app {
+            padding: 14px 12px 28px !important;
+          }
         }
         @keyframes easymath-spin {
           to { transform: rotate(360deg); }
@@ -2330,6 +2430,22 @@ export default function Home() {
           cursor: not-allowed;
           opacity: 0.5;
         }
+        .easymath-stat-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+          margin-bottom: 16px;
+        }
+        .easymath-actions {
+          display: flex;
+          gap: 12px;
+          margin-top: 22px;
+          flex-wrap: wrap;
+        }
+        .easymath-break {
+          overflow-wrap: anywhere;
+          word-break: break-word;
+        }
         .easymath-pricing-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
@@ -2339,6 +2455,20 @@ export default function Home() {
         @media (max-width: 700px) {
           .easymath-pricing-grid {
             grid-template-columns: 1fr;
+          }
+        }
+        @media (max-width: 520px) {
+          .easymath-stat-grid {
+            grid-template-columns: 1fr;
+          }
+          .easymath-actions {
+            flex-direction: column;
+          }
+          .easymath-actions > button {
+            width: 100%;
+          }
+          .easymath-app textarea {
+            min-height: 120px !important;
           }
         }
       `}</style>
@@ -2469,7 +2599,7 @@ export default function Home() {
                     setAuthMessage(
                       cloudEnabled
                         ? ""
-                        : "Cloud accounts need Supabase setup. You can still use EasyMath with the Free local limit."
+                        : "Cloud accounts aren't available yet. You can still use EasyMath with the Free local limit."
                     );
                     setAuthModalOpen(true);
                   }}
@@ -2490,6 +2620,8 @@ export default function Home() {
               )}
 
               <button
+                type="button"
+                aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
                 onClick={toggleTheme}
                 style={{
                   border: `1px solid ${theme.border}`,
@@ -2563,8 +2695,7 @@ export default function Home() {
                 lineHeight: 1.6,
               }}
             >
-              Type your question or upload a photo of
-              homework, a worksheet, or handwritten math.
+              Type a question like 2x + 5 = 15, or upload a photo of printed or handwritten math.
             </p>
 
             <div
@@ -2630,7 +2761,9 @@ export default function Home() {
                 <>
                   {solverUnlimited
                     ? "Pro plan: unlimited solver questions. Practice Mode stays available."
-                    : `Free plan: ${dailyUsed} of ${dailyLimit} solver questions used today. Practice questions do not use this limit.`}
+                    : signedIn
+                      ? `Free plan: ${dailyUsed} of ${dailyLimit} solver questions used today. Practice does not use this limit.`
+                      : `Free plan: ${dailyUsed} of ${dailyLimit} solver questions used today. Practice does not use this limit. Log in to keep progress across devices.`}
                 </>
               )}
             </div>
@@ -2665,10 +2798,12 @@ export default function Home() {
                   lineHeight: 1.5,
                 }}
               >
-                Same correct answer. Clearer explanation for your level.
+                Same correct answer. Explanations match the level you pick.
               </div>
 
               <div
+                role="group"
+                aria-label="Student Level"
                 style={{
                   display: "flex",
                   gap: "8px",
@@ -2682,6 +2817,7 @@ export default function Home() {
                     <button
                       key={level.id}
                       type="button"
+                      aria-pressed={selected}
                       onClick={() => selectStudentLevel(level.id)}
                       style={{
                         border: selected
@@ -2742,10 +2878,12 @@ export default function Home() {
                   lineHeight: 1.5,
                 }}
               >
-                Choose a topic, then start a short 5-question practice set.
+                Choose a topic, then start a 5-question set. Check each answer — practice does not use your solver limit.
               </div>
 
               <div
+                role="group"
+                aria-label="Practice Topic"
                 style={{
                   display: "flex",
                   gap: "8px",
@@ -2759,6 +2897,7 @@ export default function Home() {
                     <button
                       key={topic.id}
                       type="button"
+                      aria-pressed={selected}
                       onClick={() => selectPracticeTopic(topic.id)}
                       disabled={
                         practiceGenerating ||
@@ -2905,6 +3044,7 @@ export default function Home() {
 
             <textarea
               value={question}
+              aria-label="Math question"
               onChange={(e) => {
                 setQuestion(e.target.value);
                 setMessage("");
@@ -2950,6 +3090,7 @@ export default function Home() {
               {examples.map((example) => (
                 <button
                   key={example}
+                  type="button"
                   onClick={() =>
                     solveQuestion(example)
                   }
@@ -3009,14 +3150,14 @@ export default function Home() {
                   marginBottom: "14px",
                 }}
               >
-                Upload a photo of a math question and
-                EasyMath AI will read and solve it.
+                Printed or handwritten is fine. Keep the full question visible and well lit.
               </div>
 
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/*,.heic,.heif,.hif"
+                aria-label="Upload a photo of a math problem"
                 onChange={handleImage}
                 style={{
                   display: "none",
@@ -3025,6 +3166,7 @@ export default function Home() {
 
               {!imagePreview && (
                 <button
+                  type="button"
                   onClick={() =>
                     fileInputRef.current?.click()
                   }
@@ -3070,6 +3212,7 @@ export default function Home() {
                     }}
                   >
                     <button
+                      type="button"
                       onClick={solveImage}
                       disabled={
                         imageLoading || loading || solverLimitReached
@@ -3114,6 +3257,7 @@ export default function Home() {
                     </button>
 
                     <button
+                      type="button"
                       onClick={removeImage}
                       disabled={imageLoading}
                       style={{
@@ -3141,6 +3285,7 @@ export default function Home() {
 
             {message && (
               <div
+                role="status"
                 style={{
                   marginTop: "12px",
                   color: "#f59e0b",
@@ -3153,15 +3298,9 @@ export default function Home() {
               </div>
             )}
 
-            <div
-              style={{
-                display: "flex",
-                gap: "12px",
-                marginTop: "22px",
-                flexWrap: "wrap",
-              }}
-            >
+            <div className="easymath-actions">
               <button
+                type="button"
                 onClick={() =>
                   solveQuestion()
                 }
@@ -3211,7 +3350,9 @@ export default function Home() {
               </button>
 
               <button
+                type="button"
                 onClick={clearEverything}
+                disabled={loading || imageLoading}
                 style={{
                   border: `1px solid ${theme.border}`,
 
@@ -3289,6 +3430,7 @@ export default function Home() {
                       </div>
 
                       <div
+                        className="easymath-break"
                         style={{
                           marginTop: "6px",
                           fontWeight: 800,
@@ -3314,6 +3456,7 @@ export default function Home() {
                     </div>
 
                     <button
+                      type="button"
                       onClick={() =>
                         navigator.clipboard.writeText(
                           solution
@@ -3797,6 +3940,7 @@ export default function Home() {
                       {practiceQuestion && (
                         <>
                           <div
+                            className="easymath-break"
                             style={{
                               fontSize: "20px",
                               fontWeight: 800,
@@ -3808,6 +3952,7 @@ export default function Home() {
 
                           <input
                             value={practiceAnswer}
+                            aria-label="Practice answer"
                             onChange={(e) => {
                               setPracticeAnswer(e.target.value);
                             }}
@@ -4130,6 +4275,7 @@ export default function Home() {
                       {currentReviewTopicLabel}
                     </div>
                     <div
+                      className="easymath-break"
                       style={{
                         fontSize: "20px",
                         fontWeight: 800,
@@ -4151,6 +4297,7 @@ export default function Home() {
                     </div>
                     <input
                       value={reviewAnswer}
+                      aria-label="Review answer"
                       onChange={(e) => {
                         setReviewAnswer(e.target.value);
                       }}
@@ -4450,14 +4597,7 @@ export default function Home() {
               </button>
             </div>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "10px",
-                marginBottom: "16px",
-              }}
-            >
+            <div className="easymath-stat-grid">
               {[
                 {
                   label: "Questions Solved",
@@ -4938,6 +5078,7 @@ export default function Home() {
         <div
           role="dialog"
           aria-modal="true"
+          aria-labelledby="easymath-auth-title"
           style={{
             position: "fixed",
             inset: 0,
@@ -4967,6 +5108,7 @@ export default function Home() {
             }}
           >
             <div
+              id="easymath-auth-title"
               style={{
                 fontWeight: 900,
                 fontSize: "22px",
@@ -5028,6 +5170,12 @@ export default function Home() {
                 type="password"
                 value={authPassword}
                 onChange={(e) => setAuthPassword(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void handleAuthSubmit();
+                  }
+                }}
                 autoComplete={
                   authMode === "login" ? "current-password" : "new-password"
                 }
