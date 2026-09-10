@@ -22,6 +22,7 @@ import {
   applyDashboardStreak,
   emptyDashboardStats,
   isDashboardStatsEmpty,
+  listNamedTopicMastery,
   normalizeDashboardStats,
   normalizePracticeMistakes,
   normalizeSolverHistory,
@@ -30,7 +31,9 @@ import {
   recordDashboardTopicAttempt,
   recordPracticeMistake,
   resolvePracticeMistake,
+  getTopicMastery,
   SOLVER_HISTORY_LIMIT,
+  TOPIC_MASTERY_LABELS,
   type CloudDashboardStats,
   type CloudPracticeMistake,
   type PracticeDifficultyNudge,
@@ -1696,14 +1699,10 @@ export default function Home() {
           level: studentLevel,
           topic: practiceTopic,
           count: 1,
-          ...(practiceSource === "recommended"
-            ? {
-                ease: practiceDifficultyNudge(
-                  dashboardStatsRef.current,
-                  practiceTopic
-                ),
-              }
-            : {}),
+          ease: practiceDifficultyNudge(
+            dashboardStatsRef.current,
+            practiceTopic
+          ),
         }),
       });
 
@@ -2154,6 +2153,14 @@ export default function Home() {
     ? PRACTICE_TOPICS.find((topic) => topic.id === topicRanks.weakest)?.label ||
       "—"
     : "—";
+  const namedTopicProgress = listNamedTopicMastery(dashboardStats);
+  const recommendedMastery = recommendedTopic
+    ? getTopicMastery(dashboardStats, recommendedTopic)
+    : null;
+  const recommendedExplanation =
+    recommendedMastery && recommendedTopicLabel
+      ? `${recommendedTopicLabel} • ${recommendedMastery.correct} of ${recommendedMastery.attempted} correct • ${TOPIC_MASTERY_LABELS[recommendedMastery.status]}`
+      : "";
   const streakLabel =
     dashboardStats.streakCount > 0
       ? dashboardStats.streakCount === 1
@@ -2850,6 +2857,19 @@ export default function Home() {
                       ? "Creating your practice..."
                       : `Practice ${recommendedTopicLabel}`}
                   </button>
+                  {recommendedExplanation ? (
+                    <div
+                      style={{
+                        marginTop: "8px",
+                        color: theme.muted,
+                        fontSize: "12px",
+                        fontWeight: 700,
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      {recommendedExplanation}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -4504,6 +4524,104 @@ export default function Home() {
                 </div>
               ))}
             </div>
+
+            {namedTopicProgress.length > 0 ? (
+              <div
+                style={{
+                  marginBottom: "16px",
+                  padding: "14px 15px",
+                  borderRadius: "16px",
+                  border: `1px solid ${theme.border}`,
+                  background: darkMode ? "#0b1220" : "#f8fafc",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 900,
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    color: theme.muted,
+                    marginBottom: "8px",
+                  }}
+                >
+                  Topic Progress
+                </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "6px",
+                  }}
+                >
+                  {namedTopicProgress.map((item) => {
+                    const label =
+                      PRACTICE_TOPICS.find((topic) => topic.id === item.topic)
+                        ?.label || item.topic;
+                    const accuracyPct =
+                      item.accuracy === null
+                        ? "—"
+                        : `${Math.round(item.accuracy * 100)}%`;
+                    const statusColor =
+                      item.status === "strong"
+                        ? darkMode
+                          ? "#86efac"
+                          : "#15803d"
+                        : item.status === "needs_practice"
+                          ? darkMode
+                            ? "#fda4af"
+                            : "#be123c"
+                          : theme.muted;
+
+                    return (
+                      <div
+                        key={item.topic}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "baseline",
+                          gap: "8px",
+                          fontSize: "13px",
+                          lineHeight: 1.35,
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontWeight: 800,
+                            minWidth: 0,
+                          }}
+                        >
+                          {label}
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "8px",
+                            flexWrap: "wrap",
+                            justifyContent: "flex-end",
+                            color: theme.muted,
+                            fontWeight: 700,
+                            fontSize: "12px",
+                            textAlign: "right",
+                          }}
+                        >
+                          <span>
+                            {item.attempted} checked · {accuracyPct}
+                          </span>
+                          <span
+                            style={{
+                              color: statusColor,
+                              fontWeight: 800,
+                            }}
+                          >
+                            {TOPIC_MASTERY_LABELS[item.status]}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
 
             <div
               style={{

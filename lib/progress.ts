@@ -59,6 +59,29 @@ export type CloudDashboardStats = {
 };
 
 export const TOPIC_RANK_MIN_ATTEMPTS = 3;
+export const TOPIC_MASTERY_MIN_ATTEMPTS = 3;
+export const TOPIC_MASTERY_STRONG_MIN_ATTEMPTS = 5;
+
+export type TopicMasteryStatus =
+  | "not_enough_data"
+  | "needs_practice"
+  | "developing"
+  | "strong";
+
+export type TopicMastery = {
+  topic: DashboardTopicId;
+  attempted: number;
+  correct: number;
+  accuracy: number | null;
+  status: TopicMasteryStatus;
+};
+
+export const TOPIC_MASTERY_LABELS: Record<TopicMasteryStatus, string> = {
+  not_enough_data: "Not enough data",
+  needs_practice: "Needs Practice",
+  developing: "Developing",
+  strong: "Strong",
+};
 
 export type CloudProgress = {
   studentLevel: string;
@@ -266,6 +289,63 @@ export function rankDashboardTopics(
   };
 }
 
+export function topicMasteryStatus(
+  attempted: number,
+  correct: number
+): TopicMasteryStatus {
+  const safeAttempted = safeCount(attempted);
+  const safeCorrect = Math.min(safeAttempted, safeCount(correct));
+
+  if (safeAttempted < TOPIC_MASTERY_MIN_ATTEMPTS) {
+    return "not_enough_data";
+  }
+
+  const accuracy = safeCorrect / safeAttempted;
+
+  if (accuracy < 0.6) {
+    return "needs_practice";
+  }
+
+  if (accuracy < 0.8 || safeAttempted < TOPIC_MASTERY_STRONG_MIN_ATTEMPTS) {
+    return "developing";
+  }
+
+  return "strong";
+}
+
+export function getTopicMastery(
+  stats: CloudDashboardStats,
+  topic: string
+): TopicMastery | null {
+  if (topic === "mixed" || !DASHBOARD_TOPIC_SET.has(topic)) {
+    return null;
+  }
+
+  const topicId = topic as DashboardTopicId;
+  const normalized = normalizeDashboardStats(stats);
+  const stat = normalized.topics[topicId] || { attempted: 0, correct: 0 };
+  const attempted = stat.attempted;
+  const correct = stat.correct;
+
+  return {
+    topic: topicId,
+    attempted,
+    correct,
+    accuracy: attempted > 0 ? correct / attempted : null,
+    status: topicMasteryStatus(attempted, correct),
+  };
+}
+
+export function listNamedTopicMastery(
+  stats: CloudDashboardStats
+): TopicMastery[] {
+  return DASHBOARD_TOPIC_IDS.filter((id) => id !== "mixed")
+    .map((id) => getTopicMastery(stats, id))
+    .filter((item): item is TopicMastery =>
+      Boolean(item && item.attempted > 0)
+    );
+}
+
 export type PracticeDifficultyNudge = -1 | 0 | 1;
 
 /** Mild ease vs the current Student Level. Never changes the level itself. */
@@ -273,34 +353,17 @@ export function practiceDifficultyNudge(
   topicStats: CloudDashboardStats,
   topic: string
 ): PracticeDifficultyNudge {
-  if (topic === "mixed") {
+  const mastery = getTopicMastery(topicStats, topic);
+
+  if (!mastery) {
     return 0;
   }
 
-  const normalized = normalizeDashboardStats(topicStats);
-
-  if (!DASHBOARD_TOPIC_SET.has(topic)) {
-    return 0;
-  }
-
-  const stat = normalized.topics[topic as DashboardTopicId];
-  const attempted = stat?.attempted || 0;
-
-  if (attempted < TOPIC_RANK_MIN_ATTEMPTS) {
-    return 0;
-  }
-
-  const accuracy = (stat?.correct || 0) / attempted;
-
-  if (accuracy < 0.4) {
+  if (mastery.status === "needs_practice") {
     return -1;
   }
 
-  if (accuracy <= 0.8) {
-    return 0;
-  }
-
-  if (accuracy > 0.8 && attempted >= 5) {
+  if (mastery.status === "strong") {
     return 1;
   }
 

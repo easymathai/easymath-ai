@@ -64,14 +64,14 @@ function parsePracticeEase(value: unknown): PracticeEase {
 
 function getEaseInstructions(ease: PracticeEase): string {
   if (ease === -1) {
-    return "Ease -1: slightly easier within this same Student Level. Use friendlier numbers and fewer steps. Do not drop to a lower Student Level.";
+    return "Ease -1 (Needs Practice): slightly easier and more foundational within this same Student Level. Use friendlier numbers, fewer steps, and a clear first-to-next progression. Do not drop to a lower Student Level.";
   }
 
   if (ease === 1) {
-    return "Ease +1: slightly more challenging within this same Student Level. Still school math for this level. Do not jump to a higher Student Level.";
+    return "Ease +1 (Strong): slightly more challenging within this same Student Level. Still ordinary school math for this level. Do not jump to a higher Student Level or university-style problems.";
   }
 
-  return "Ease 0: normal current behavior for this Student Level.";
+  return "Ease 0: normal grade-appropriate difficulty for this Student Level.";
 }
 
 function getTopicInstructions(topic: PracticeTopic): string {
