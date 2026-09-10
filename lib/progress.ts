@@ -3,6 +3,17 @@ export type CloudActivityItem = {
   at: string;
 };
 
+export const PRACTICE_MISTAKES_LIMIT = 20;
+
+export type CloudPracticeMistake = {
+  id: string;
+  topic: string;
+  question: string;
+  studentAnswer: string;
+  at: string;
+  correctAnswer?: string;
+};
+
 export type CloudPracticeProgress = {
   topic?: string;
   index?: number;
@@ -10,6 +21,7 @@ export type CloudPracticeProgress = {
   set?: string[];
   tokens?: string[];
   completed?: boolean;
+  mistakes?: CloudPracticeMistake[];
 };
 
 export const SOLVER_HISTORY_LIMIT = 10;
@@ -56,6 +68,7 @@ export type CloudProgress = {
   practiceCorrect: number;
   activity: CloudActivityItem[];
   practiceProgress: CloudPracticeProgress;
+  practiceMistakes: CloudPracticeMistake[];
   solverHistory: CloudSolverHistoryItem[];
   dashboardStats: CloudDashboardStats;
 };
@@ -294,6 +307,131 @@ export function practiceDifficultyNudge(
   return 0;
 }
 
+export function mistakeQuestionKey(question: string): string {
+  return question.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+export function normalizePracticeMistakes(input: unknown): CloudPracticeMistake[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  const items: CloudPracticeMistake[] = [];
+  const seen = new Set<string>();
+
+  for (const raw of input) {
+    if (!raw || typeof raw !== "object") {
+      continue;
+    }
+
+    const row = raw as Record<string, unknown>;
+    const question = typeof row.question === "string" ? row.question.trim() : "";
+    const studentAnswer =
+      typeof row.studentAnswer === "string" ? row.studentAnswer.trim() : "";
+    const at = typeof row.at === "string" ? row.at.trim() : "";
+    const topic = typeof row.topic === "string" ? row.topic.trim() : "";
+
+    if (!question || !studentAnswer || !at || Number.isNaN(Date.parse(at))) {
+      continue;
+    }
+
+    const key = mistakeQuestionKey(question);
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    const id =
+      typeof row.id === "string" && row.id.trim()
+        ? row.id.trim()
+        : `m-${items.length}-${key.slice(0, 24)}`;
+    const item: CloudPracticeMistake = {
+      id,
+      topic: DASHBOARD_TOPIC_SET.has(topic) ? topic : "mixed",
+      question,
+      studentAnswer,
+      at,
+    };
+    const correctAnswer =
+      typeof row.correctAnswer === "string" ? row.correctAnswer.trim() : "";
+
+    if (correctAnswer) {
+      item.correctAnswer = correctAnswer;
+    }
+
+    seen.add(key);
+    items.push(item);
+
+    if (items.length >= PRACTICE_MISTAKES_LIMIT) {
+      break;
+    }
+  }
+
+  return items;
+}
+
+export function recordPracticeMistake(
+  current: CloudPracticeMistake[],
+  extra: {
+    topic: string;
+    question: string;
+    studentAnswer: string;
+    correctAnswer?: string;
+    at?: string;
+    id?: string;
+  }
+): CloudPracticeMistake[] {
+  const normalized = normalizePracticeMistakes(current);
+  const question = extra.question.trim();
+  const studentAnswer = extra.studentAnswer.trim();
+
+  if (!question || !studentAnswer) {
+    return normalized;
+  }
+
+  const key = mistakeQuestionKey(question);
+
+  if (normalized.some((item) => mistakeQuestionKey(item.question) === key)) {
+    return normalized;
+  }
+
+  const at =
+    extra.at && !Number.isNaN(Date.parse(extra.at))
+      ? extra.at
+      : new Date().toISOString();
+  const topic = DASHBOARD_TOPIC_SET.has(extra.topic) ? extra.topic : "mixed";
+  const item: CloudPracticeMistake = {
+    id:
+      extra.id && extra.id.trim()
+        ? extra.id.trim()
+        : `m-${Date.now()}-${normalized.length}`,
+    topic,
+    question,
+    studentAnswer,
+    at,
+  };
+  const correctAnswer = extra.correctAnswer?.trim();
+
+  if (correctAnswer) {
+    item.correctAnswer = correctAnswer;
+  }
+
+  return [item, ...normalized].slice(0, PRACTICE_MISTAKES_LIMIT);
+}
+
+export function resolvePracticeMistake(
+  current: CloudPracticeMistake[],
+  id: string
+): CloudPracticeMistake[] {
+  const normalized = normalizePracticeMistakes(current);
+
+  if (!id.trim()) {
+    return normalized;
+  }
+
+  return normalized.filter((item) => item.id !== id);
+}
+
 export function normalizeSolverHistory(input: unknown): CloudSolverHistoryItem[] {
   if (!Array.isArray(input)) {
     return [];
@@ -355,12 +493,19 @@ export function normalizeCloudProgress(input: unknown): CloudProgress {
         .slice(0, 8)
     : [];
 
-  const practiceProgress =
+  const practiceProgressRaw =
     row.practice_progress && typeof row.practice_progress === "object"
       ? (row.practice_progress as CloudPracticeProgress)
       : row.practiceProgress && typeof row.practiceProgress === "object"
         ? (row.practiceProgress as CloudPracticeProgress)
         : {};
+  const practiceMistakes = normalizePracticeMistakes(
+    practiceProgressRaw.mistakes ?? row.practiceMistakes
+  );
+  const practiceProgress: CloudPracticeProgress = {
+    ...practiceProgressRaw,
+    mistakes: practiceMistakes,
+  };
 
   return {
     studentLevel:
@@ -381,6 +526,7 @@ export function normalizeCloudProgress(input: unknown): CloudProgress {
     practiceCorrect: Number(row.practice_correct ?? row.practiceCorrect) || 0,
     activity,
     practiceProgress,
+    practiceMistakes,
     solverHistory: normalizeSolverHistory(
       row.solver_history ?? row.solverHistory
     ),

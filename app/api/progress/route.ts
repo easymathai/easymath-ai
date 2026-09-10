@@ -3,6 +3,7 @@ import { getPlanDisplayName, resolveUserPlan } from "@/lib/plans";
 import {
   normalizeCloudProgress,
   normalizeDashboardStats,
+  normalizePracticeMistakes,
   normalizeSolverHistory,
 } from "@/lib/progress";
 import { getRequestUser } from "@/lib/supabase/server";
@@ -137,10 +138,14 @@ export async function PUT(request: Request) {
         .slice(0, 8)
     : [];
 
-  const practiceProgress =
+  const practiceProgressIn =
     body.practiceProgress && typeof body.practiceProgress === "object"
-      ? body.practiceProgress
+      ? (body.practiceProgress as Record<string, unknown>)
       : {};
+  const practiceProgress = {
+    ...practiceProgressIn,
+    mistakes: normalizePracticeMistakes(practiceProgressIn.mistakes),
+  };
 
   const solverHistory = normalizeSolverHistory(body.solverHistory);
   const dashboardStats = normalizeDashboardStats(body.dashboardStats);

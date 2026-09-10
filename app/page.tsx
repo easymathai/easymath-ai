@@ -23,12 +23,16 @@ import {
   emptyDashboardStats,
   isDashboardStatsEmpty,
   normalizeDashboardStats,
+  normalizePracticeMistakes,
   normalizeSolverHistory,
   practiceDifficultyNudge,
   rankDashboardTopics,
   recordDashboardTopicAttempt,
+  recordPracticeMistake,
+  resolvePracticeMistake,
   SOLVER_HISTORY_LIMIT,
   type CloudDashboardStats,
+  type CloudPracticeMistake,
   type PracticeDifficultyNudge,
 } from "@/lib/progress";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -256,9 +260,22 @@ export default function Home() {
     "recommended" | "manual" | null
   >(null);
   const [practiceLaunchError, setPracticeLaunchError] = useState("");
+  const [practiceMistakes, setPracticeMistakes] = useState<
+    CloudPracticeMistake[]
+  >([]);
+  const [reviewActive, setReviewActive] = useState(false);
+  const [reviewQueue, setReviewQueue] = useState<CloudPracticeMistake[]>([]);
+  const [reviewIndex, setReviewIndex] = useState(0);
+  const [reviewAnswer, setReviewAnswer] = useState("");
+  const [reviewChecking, setReviewChecking] = useState(false);
+  const [reviewFeedback, setReviewFeedback] = useState("");
+  const [reviewHint, setReviewHint] = useState("");
+  const [reviewCorrect, setReviewCorrect] = useState<boolean | null>(null);
+  const [reviewCompleted, setReviewCompleted] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const practicePanelRef = useRef<HTMLDivElement>(null);
+  const reviewPanelRef = useRef<HTMLDivElement>(null);
   const latestSolutionRef = useRef(solution);
   const latestPracticeQuestionRef = useRef("");
   const practiceRequestRef = useRef(0);
@@ -267,6 +284,7 @@ export default function Home() {
   const statsRef = useRef(stats);
   const historyRef = useRef(history);
   const dashboardStatsRef = useRef(dashboardStats);
+  const practiceMistakesRef = useRef(practiceMistakes);
   const levelRef = useRef(studentLevel);
   const topicRef = useRef(practiceTopic);
   const practiceSyncRef = useRef({
@@ -281,6 +299,7 @@ export default function Home() {
   statsRef.current = stats;
   historyRef.current = history;
   dashboardStatsRef.current = dashboardStats;
+  practiceMistakesRef.current = practiceMistakes;
   levelRef.current = studentLevel;
   topicRef.current = practiceTopic;
   practiceSyncRef.current = {
@@ -355,6 +374,18 @@ export default function Home() {
         const next = normalizeDashboardStats(JSON.parse(savedDashboard));
         dashboardStatsRef.current = next;
         setDashboardStats(next);
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const savedMistakes = localStorage.getItem("easymath-practice-mistakes");
+
+      if (savedMistakes) {
+        const next = normalizePracticeMistakes(JSON.parse(savedMistakes));
+        practiceMistakesRef.current = next;
+        setPracticeMistakes(next);
       }
     } catch {
       // ignore
@@ -460,6 +491,7 @@ export default function Home() {
     practiceCompleted,
     history,
     dashboardStats,
+    practiceMistakes,
   ]);
 
   useEffect(() => {
@@ -561,6 +593,21 @@ export default function Home() {
     }
   }
 
+  function persistPracticeMistakes(next: CloudPracticeMistake[]) {
+    const normalized = normalizePracticeMistakes(next);
+    practiceMistakesRef.current = normalized;
+    setPracticeMistakes(normalized);
+
+    try {
+      localStorage.setItem(
+        "easymath-practice-mistakes",
+        JSON.stringify(normalized)
+      );
+    } catch {
+      // Safari private mode may block storage.
+    }
+  }
+
   function touchDashboardStreak() {
     persistDashboardStats(
       applyDashboardStreak(dashboardStatsRef.current, utcUsageDate())
@@ -654,19 +701,24 @@ export default function Home() {
           const cloudDashboard = normalizeDashboardStats(
             progress.dashboardStats
           );
+          const cloudMistakes = normalizePracticeMistakes(
+            progress.practiceMistakes ?? progress.practiceProgress?.mistakes
+          );
           const cloudEmpty =
             Number(progress.questionsSolved) === 0 &&
             Number(progress.practiceAttempted) === 0 &&
             (!Array.isArray(progress.activity) ||
               progress.activity.length === 0) &&
-            isDashboardStatsEmpty(cloudDashboard);
+            isDashboardStatsEmpty(cloudDashboard) &&
+            cloudMistakes.length === 0;
 
           const local = statsRef.current;
           const localHasData =
             local.questionsSolved > 0 ||
             local.practiceAttempted > 0 ||
             local.activity.length > 0 ||
-            !isDashboardStatsEmpty(dashboardStatsRef.current);
+            !isDashboardStatsEmpty(dashboardStatsRef.current) ||
+            practiceMistakesRef.current.length > 0;
 
           if (cloudEmpty && localHasData) {
             cloudReadyRef.current = true;
@@ -725,6 +777,8 @@ export default function Home() {
               setPracticeScore(Number(pp.score) || 0);
               setPracticeCompleted(Boolean(pp.completed));
             }
+
+            persistPracticeMistakes(cloudMistakes);
           }
 
             if (!isDashboardStatsEmpty(cloudDashboard)) {
@@ -797,6 +851,7 @@ export default function Home() {
             set: practice.set,
             tokens: practice.tokens,
             completed: practice.completed,
+            mistakes: practiceMistakesRef.current,
           },
         }),
       });
@@ -1318,6 +1373,13 @@ export default function Home() {
           recordPracticeDashboard({
             attemptedDelta: 1,
           });
+          persistPracticeMistakes(
+            recordPracticeMistake(practiceMistakesRef.current, {
+              topic: topicRef.current,
+              question: practiceWhenChecked,
+              studentAnswer: practiceAnswer,
+            })
+          );
         }
       }
     } catch {
@@ -1339,6 +1401,154 @@ export default function Home() {
         latestPracticeQuestionRef.current === practiceWhenChecked
       ) {
         setPracticeChecking(false);
+      }
+    }
+  }
+
+  function resetReviewQuestionState() {
+    setReviewAnswer("");
+    setReviewChecking(false);
+    setReviewFeedback("");
+    setReviewHint("");
+    setReviewCorrect(null);
+  }
+
+  function startMistakeReview() {
+    const queue = normalizePracticeMistakes(practiceMistakesRef.current);
+
+    if (queue.length === 0) {
+      return;
+    }
+
+    setReviewQueue(queue);
+    setReviewIndex(0);
+    setReviewCompleted(false);
+    setReviewActive(true);
+    resetReviewQuestionState();
+
+    window.setTimeout(() => {
+      reviewPanelRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 50);
+  }
+
+  function closeMistakeReview() {
+    setReviewActive(false);
+    setReviewQueue([]);
+    setReviewIndex(0);
+    setReviewCompleted(false);
+    resetReviewQuestionState();
+  }
+
+  function goToNextReviewMistake() {
+    if (reviewChecking) {
+      return;
+    }
+
+    const nextIndex = reviewIndex + 1;
+
+    if (nextIndex >= reviewQueue.length) {
+      setReviewCompleted(true);
+      resetReviewQuestionState();
+      return;
+    }
+
+    setReviewIndex(nextIndex);
+    resetReviewQuestionState();
+  }
+
+  async function checkReviewAnswer() {
+    const current = reviewQueue[reviewIndex];
+
+    if (
+      !current ||
+      reviewChecking ||
+      reviewCompleted ||
+      practiceGenerating ||
+      loading ||
+      imageLoading
+    ) {
+      return;
+    }
+
+    if (!reviewAnswer.trim()) {
+      setReviewCorrect(null);
+      setReviewHint("");
+      setReviewFeedback("Please enter an answer to check.");
+      return;
+    }
+
+    setReviewChecking(true);
+    setReviewFeedback("");
+    setReviewHint("");
+    setReviewCorrect(null);
+
+    const questionWhenChecked = current.question;
+    const mistakeId = current.id;
+
+    try {
+      const response = await fetch("/api/check-practice", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          practiceQuestion: current.question,
+          studentAnswer: reviewAnswer,
+          level: studentLevel,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (reviewQueue[reviewIndex]?.id !== mistakeId) {
+        return;
+      }
+
+      if (!response.ok) {
+        setReviewCorrect(null);
+        setReviewHint("");
+        setReviewFeedback(
+          studentFriendlyError(
+            data.error,
+            "We couldn't check that answer. Please try again."
+          )
+        );
+        return;
+      }
+
+      const isCorrect = Boolean(data.correct);
+
+      setReviewCorrect(isCorrect);
+      setReviewFeedback(
+        typeof data.feedback === "string"
+          ? data.feedback
+          : isCorrect
+            ? "Yes — that's right."
+            : "Not quite."
+      );
+      setReviewHint(
+        isCorrect ? "" : typeof data.hint === "string" ? data.hint : ""
+      );
+
+      if (isCorrect) {
+        persistPracticeMistakes(
+          resolvePracticeMistake(practiceMistakesRef.current, mistakeId)
+        );
+      }
+    } catch {
+      if (reviewQueue[reviewIndex]?.id !== mistakeId) {
+        return;
+      }
+
+      setReviewCorrect(null);
+      setReviewHint("");
+      setReviewFeedback("We couldn't check that answer. Please try again.");
+    } finally {
+      if (questionWhenChecked === reviewQueue[reviewIndex]?.question) {
+        setReviewChecking(false);
       }
     }
   }
@@ -1950,6 +2160,12 @@ export default function Home() {
         ? "1 day"
         : `${dashboardStats.streakCount} days`
       : "—";
+  const unresolvedMistakeCount = practiceMistakes.length;
+  const currentReviewMistake = reviewQueue[reviewIndex] || null;
+  const currentReviewTopicLabel = currentReviewMistake
+    ? PRACTICE_TOPICS.find((topic) => topic.id === currentReviewMistake.topic)
+        ?.label || "Practice"
+    : "Practice";
 
   const solverLimitReached =
     !solverUnlimited && dailyUsed >= dailyLimit;
@@ -3807,6 +4023,288 @@ export default function Home() {
                   )}
                 </div>
               )}
+
+            {reviewActive ? (
+              <div
+                ref={reviewPanelRef}
+                style={{
+                  marginTop: "22px",
+                  padding: "20px 22px",
+                  borderRadius: "18px",
+                  background: darkMode ? "#2e1065" : "#faf5ff",
+                  border: "1px solid #8b5cf6",
+                  boxShadow: theme.shadowSoft,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    gap: "12px",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <strong>🔁 MISTAKES TO REVIEW</strong>
+                  <div
+                    style={{
+                      fontWeight: 800,
+                      fontSize: "13px",
+                      color: darkMode ? "#ddd6fe" : "#6d28d9",
+                    }}
+                  >
+                    {reviewCompleted
+                      ? "Review complete"
+                      : `Mistake ${reviewIndex + 1} of ${reviewQueue.length}`}
+                  </div>
+                </div>
+
+                {reviewCompleted ? (
+                  <div>
+                    <div
+                      style={{
+                        fontSize: "22px",
+                        fontWeight: 900,
+                        marginTop: "14px",
+                      }}
+                    >
+                      You&apos;re all caught up
+                    </div>
+                    <div
+                      style={{
+                        marginTop: "8px",
+                        color: theme.muted,
+                        fontWeight: 700,
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      Correctly reviewed mistakes are cleared from this list.
+                    </div>
+                    <button
+                      type="button"
+                      onClick={closeMistakeReview}
+                      style={{
+                        marginTop: "16px",
+                        border: `1px solid ${theme.border}`,
+                        background: theme.buttonSoft,
+                        color: theme.text,
+                        padding: "11px 17px",
+                        borderRadius: "11px",
+                        fontWeight: 800,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Close Review
+                    </button>
+                  </div>
+                ) : currentReviewMistake ? (
+                  <>
+                    <div
+                      style={{
+                        marginTop: "10px",
+                        color: theme.muted,
+                        fontWeight: 700,
+                        fontSize: "13px",
+                      }}
+                    >
+                      {currentReviewTopicLabel}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "20px",
+                        fontWeight: 800,
+                        marginTop: "8px",
+                      }}
+                    >
+                      {currentReviewMistake.question}
+                    </div>
+                    <div
+                      style={{
+                        marginTop: "8px",
+                        color: theme.muted,
+                        fontWeight: 600,
+                        fontSize: "13px",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      Last answer: {currentReviewMistake.studentAnswer}
+                    </div>
+                    <input
+                      value={reviewAnswer}
+                      onChange={(e) => {
+                        setReviewAnswer(e.target.value);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          if (!reviewChecking && reviewCorrect !== true) {
+                            void checkReviewAnswer();
+                          }
+                        }
+                      }}
+                      placeholder="Type a new answer"
+                      disabled={reviewChecking || reviewCorrect === true}
+                      style={{
+                        width: "100%",
+                        marginTop: "16px",
+                        padding: "13px 16px",
+                        boxSizing: "border-box",
+                        borderRadius: "14px",
+                        border: `1px solid ${
+                          darkMode ? "#6d28d9" : "#c4b5fd"
+                        }`,
+                        background: darkMode ? "#1e1b4b" : "#ffffff",
+                        color: theme.text,
+                        fontSize: "16px",
+                        fontWeight: 700,
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void checkReviewAnswer()}
+                      disabled={reviewChecking || reviewCorrect === true}
+                      style={{
+                        marginTop: "12px",
+                        border: "none",
+                        background:
+                          reviewChecking || reviewCorrect === true
+                            ? "#86efac"
+                            : "linear-gradient(135deg,#16a34a,#15803d)",
+                        color: "white",
+                        padding: "11px 17px",
+                        borderRadius: "11px",
+                        fontWeight: 800,
+                        cursor:
+                          reviewChecking || reviewCorrect === true
+                            ? "default"
+                            : "pointer",
+                      }}
+                    >
+                      {reviewChecking ? (
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "8px",
+                          }}
+                        >
+                          <span className="easymath-spinner" aria-hidden="true" />
+                          Checking...
+                        </span>
+                      ) : (
+                        "Check Answer"
+                      )}
+                    </button>
+                    {reviewFeedback ? (
+                      <div
+                        style={{
+                          marginTop: "14px",
+                          padding: "14px 16px",
+                          borderRadius: "12px",
+                          background:
+                            reviewCorrect === true
+                              ? darkMode
+                                ? "#14532d"
+                                : "#dcfce7"
+                              : reviewCorrect === false
+                                ? darkMode
+                                  ? "#4c0519"
+                                  : "#ffe4e6"
+                                : darkMode
+                                  ? "#3b0764"
+                                  : "#ede9fe",
+                          border:
+                            reviewCorrect === true
+                              ? "1px solid #22c55e"
+                              : reviewCorrect === false
+                                ? "1px solid #fb7185"
+                                : "1px solid #8b5cf6",
+                          fontWeight: 700,
+                          lineHeight: 1.6,
+                        }}
+                      >
+                        {reviewFeedback}
+                        {reviewCorrect === false && reviewHint ? (
+                          <div
+                            style={{
+                              marginTop: "8px",
+                              fontWeight: 600,
+                            }}
+                          >
+                            Hint: {reviewHint}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {reviewCorrect === true ? (
+                      <button
+                        type="button"
+                        onClick={goToNextReviewMistake}
+                        style={{
+                          marginTop: "16px",
+                          border: "none",
+                          background: "linear-gradient(135deg,#7c3aed,#6d28d9)",
+                          color: "white",
+                          padding: "11px 17px",
+                          borderRadius: "11px",
+                          fontWeight: 800,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {reviewIndex + 1 >= reviewQueue.length
+                          ? "Finish Review"
+                          : "Next Mistake →"}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={closeMistakeReview}
+                        style={{
+                          marginTop: "16px",
+                          border: `1px solid ${theme.border}`,
+                          background: theme.buttonSoft,
+                          color: theme.text,
+                          padding: "11px 17px",
+                          borderRadius: "11px",
+                          fontWeight: 800,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Close Review
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <div
+                    style={{
+                      marginTop: "14px",
+                      fontWeight: 700,
+                      color: theme.muted,
+                    }}
+                  >
+                    No mistakes left to review.
+                    <div>
+                      <button
+                        type="button"
+                        onClick={closeMistakeReview}
+                        style={{
+                          marginTop: "16px",
+                          border: `1px solid ${theme.border}`,
+                          background: theme.buttonSoft,
+                          color: theme.text,
+                          padding: "11px 17px",
+                          borderRadius: "11px",
+                          fontWeight: 800,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Close Review
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : null}
           </section>
 
           <aside
@@ -4005,6 +4503,96 @@ export default function Home() {
                   </div>
                 </div>
               ))}
+            </div>
+
+            <div
+              style={{
+                marginBottom: "16px",
+                padding: "14px 15px",
+                borderRadius: "16px",
+                border: `1px solid ${theme.border}`,
+                background: darkMode ? "#0b1220" : "#f8fafc",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 900,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  color: theme.muted,
+                }}
+              >
+                Mistakes to Review
+              </div>
+              {unresolvedMistakeCount > 0 ? (
+                <>
+                  <div
+                    style={{
+                      marginTop: "8px",
+                      fontWeight: 900,
+                      fontSize: "16px",
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    {unresolvedMistakeCount === 1
+                      ? "1 mistake ready to review"
+                      : `${unresolvedMistakeCount} mistakes ready to review`}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={startMistakeReview}
+                    disabled={
+                      reviewChecking ||
+                      practiceChecking ||
+                      practiceGenerating ||
+                      loading ||
+                      imageLoading
+                    }
+                    style={{
+                      marginTop: "12px",
+                      width: "100%",
+                      border: "none",
+                      background:
+                        reviewChecking ||
+                        practiceChecking ||
+                        practiceGenerating ||
+                        loading ||
+                        imageLoading
+                          ? "#86efac"
+                          : "linear-gradient(135deg,#16a34a,#15803d)",
+                      color: "white",
+                      padding: "10px 14px",
+                      borderRadius: "11px",
+                      fontWeight: 800,
+                      fontSize: "13px",
+                      cursor:
+                        reviewChecking ||
+                        practiceChecking ||
+                        practiceGenerating ||
+                        loading ||
+                        imageLoading
+                          ? "wait"
+                          : "pointer",
+                    }}
+                  >
+                    Review Mistakes
+                  </button>
+                </>
+              ) : (
+                <div
+                  style={{
+                    marginTop: "8px",
+                    fontWeight: 700,
+                    fontSize: "14px",
+                    lineHeight: 1.5,
+                    color: theme.text,
+                  }}
+                >
+                  You&apos;re all caught up. Checked mistakes from practice will
+                  appear here.
+                </div>
+              )}
             </div>
 
             {stats.activity.length > 0 && (
