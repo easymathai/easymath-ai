@@ -98,8 +98,13 @@ export default function PrivacyPage() {
       <h2>Your choices</h2>
       <p>
         You can use EasyMath as a guest, create an account, sign out, or stop
-        using the app. There is not currently an in-app button to delete all
-        stored account data. You may contact us at{" "}
+        using the app. If you are signed in, open Account and use Delete
+        account. After you confirm by typing DELETE, EasyMath permanently
+        deletes your authentication account and the cloud progress tied to it
+        (profile, practice progress, solver history, activity, mistakes saved
+        for review, and signed-in daily usage). Guest progress in this browser
+        and the guest solver cookie are separate from that account delete. You
+        may also contact us at{" "}
         <a href={`mailto:${supportEmail}`}>{supportEmail}</a> about your
         account.
       </p>

@@ -302,6 +302,10 @@ export default function Home() {
   const [signedIn, setSignedIn] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -342,6 +346,7 @@ export default function Home() {
   const practiceNavBusyRef = useRef(false);
   const reviewCheckBusyRef = useRef(false);
   const authBusyRef = useRef(false);
+  const deleteBusyRef = useRef(false);
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cloudReadyRef = useRef(false);
   const statsRef = useRef(stats);
@@ -1031,8 +1036,102 @@ export default function Home() {
     setUserPlan("free");
     setSolverUnlimited(false);
     cloudReadyRef.current = false;
+    setDeleteConfirmOpen(false);
+    setDeleteConfirmText("");
+    setDeleteError("");
 
     void loadGuestUsage();
+  }
+
+  function clearSignedInLocalProgress() {
+    try {
+      localStorage.removeItem("easymath-history");
+      localStorage.removeItem("easymath-level");
+      localStorage.removeItem("easymath-topic");
+      localStorage.removeItem("easymath-stats");
+      localStorage.removeItem("easymath-dashboard-stats");
+      localStorage.removeItem("easymath-practice-mistakes");
+    } catch {
+      // Safari private mode may block storage.
+    }
+
+    setHistory([]);
+    setStats(emptyStats());
+    setDashboardStats(emptyDashboardStats());
+    setPracticeMistakes([]);
+    setStudentLevel("middle");
+    setPracticeTopic("mixed");
+    setPracticeSet([]);
+    setPracticeTokens([]);
+    setPracticeIndex(0);
+    setPracticeScore(0);
+    setPracticeCompleted(false);
+    setPracticeSource(null);
+    setPracticeLaunchError("");
+    setReviewActive(false);
+    setReviewQueue([]);
+    setReviewIndex(0);
+  }
+
+  async function handleDeleteAccount() {
+    if (
+      deleteBusyRef.current ||
+      deleteBusy ||
+      deleteConfirmText !== "DELETE"
+    ) {
+      return;
+    }
+
+    deleteBusyRef.current = true;
+    setDeleteBusy(true);
+    setDeleteError("");
+
+    try {
+      const headers = await authHeaders();
+      const response = await fetch("/api/account", {
+        method: "DELETE",
+        headers,
+      });
+
+      let payload: { error?: string; ok?: boolean } = {};
+      try {
+        payload = (await response.json()) as { error?: string; ok?: boolean };
+      } catch {
+        payload = {};
+      }
+
+      if (!response.ok || !payload.ok) {
+        setDeleteError(
+          studentFriendlyError(
+            payload.error,
+            "We couldn't delete your account. Please try again."
+          )
+        );
+        return;
+      }
+
+      const supabase = getSupabaseBrowserClient();
+      if (supabase) {
+        await supabase.auth.signOut();
+      }
+
+      clearSignedInLocalProgress();
+      setSignedIn(false);
+      setUserEmail(null);
+      setAccountOpen(false);
+      setDeleteConfirmOpen(false);
+      setDeleteConfirmText("");
+      setUserPlan("free");
+      setSolverUnlimited(false);
+      cloudReadyRef.current = false;
+      setMessage("Your EasyMath account and saved progress were deleted.");
+      void loadGuestUsage();
+    } catch {
+      setDeleteError("We couldn't delete your account. Please try again.");
+    } finally {
+      deleteBusyRef.current = false;
+      setDeleteBusy(false);
+    }
   }
 
   function applyUsageFromResponse(data: {
@@ -5246,6 +5345,7 @@ export default function Home() {
         <div
           role="dialog"
           aria-modal="true"
+          aria-label="Your account"
           style={{
             position: "fixed",
             inset: 0,
@@ -5255,7 +5355,11 @@ export default function Home() {
             placeItems: "center",
             padding: "18px",
           }}
-          onClick={() => setAccountOpen(false)}
+          onClick={() => {
+            if (!deleteBusy) {
+              setAccountOpen(false);
+            }
+          }}
         >
           <div
             onClick={(event) => event.stopPropagation()}
@@ -5350,9 +5454,9 @@ export default function Home() {
               style={{
                 width: "100%",
                 marginTop: "16px",
-                border: "none",
-                background: "linear-gradient(135deg,#dc2626,#b91c1c)",
-                color: "white",
+                border: `1px solid ${theme.border}`,
+                background: theme.buttonSoft,
+                color: theme.text,
                 padding: "13px 16px",
                 borderRadius: "12px",
                 fontWeight: 900,
@@ -5362,9 +5466,164 @@ export default function Home() {
               Log out
             </button>
 
+            <div
+              style={{
+                marginTop: "18px",
+                padding: "14px",
+                borderRadius: "14px",
+                border: "1px solid rgba(220,38,38,0.45)",
+                background: darkMode ? "rgba(127,29,29,0.22)" : "#fef2f2",
+              }}
+            >
+              <div
+                style={{
+                  fontWeight: 900,
+                  fontSize: "13px",
+                  letterSpacing: "0.06em",
+                  color: "#f87171",
+                  textTransform: "uppercase",
+                }}
+              >
+                Danger Zone
+              </div>
+              <p
+                style={{
+                  margin: "8px 0 0",
+                  color: theme.muted,
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  lineHeight: 1.5,
+                }}
+              >
+                Permanently deletes your EasyMath account and saved progress.
+                This cannot be undone.
+              </p>
+
+              {!deleteConfirmOpen ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteConfirmOpen(true);
+                    setDeleteConfirmText("");
+                    setDeleteError("");
+                  }}
+                  style={{
+                    width: "100%",
+                    marginTop: "12px",
+                    border: "none",
+                    background: "linear-gradient(135deg,#dc2626,#b91c1c)",
+                    color: "white",
+                    padding: "12px 16px",
+                    borderRadius: "12px",
+                    fontWeight: 900,
+                    cursor: "pointer",
+                  }}
+                >
+                  Delete account
+                </button>
+              ) : (
+                <div style={{ marginTop: "12px", display: "grid", gap: "10px" }}>
+                  <label
+                    style={{
+                      display: "grid",
+                      gap: "6px",
+                      fontSize: "12px",
+                      fontWeight: 800,
+                      color: theme.muted,
+                    }}
+                  >
+                    Type DELETE to confirm
+                    <input
+                      value={deleteConfirmText}
+                      aria-label="Type DELETE to confirm account deletion"
+                      onChange={(event) =>
+                        setDeleteConfirmText(event.target.value)
+                      }
+                      autoComplete="off"
+                      spellCheck={false}
+                      disabled={deleteBusy}
+                      style={{
+                        width: "100%",
+                        borderRadius: "10px",
+                        border: `1px solid ${theme.border}`,
+                        background: darkMode ? "#0b1220" : "#fff",
+                        color: theme.text,
+                        padding: "11px 12px",
+                        fontWeight: 700,
+                        fontSize: "14px",
+                      }}
+                    />
+                  </label>
+                  {deleteError ? (
+                    <div
+                      style={{
+                        color: "#fca5a5",
+                        fontSize: "13px",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {deleteError}
+                    </div>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteAccount()}
+                    disabled={deleteBusy || deleteConfirmText !== "DELETE"}
+                    style={{
+                      width: "100%",
+                      border: "none",
+                      background:
+                        deleteBusy || deleteConfirmText !== "DELETE"
+                          ? "#7f1d1d"
+                          : "linear-gradient(135deg,#dc2626,#991b1b)",
+                      color: "white",
+                      padding: "12px 16px",
+                      borderRadius: "12px",
+                      fontWeight: 900,
+                      cursor:
+                        deleteBusy || deleteConfirmText !== "DELETE"
+                          ? "not-allowed"
+                          : "pointer",
+                      opacity:
+                        deleteBusy || deleteConfirmText !== "DELETE" ? 0.55 : 1,
+                    }}
+                  >
+                    {deleteBusy ? "Deleting…" : "Permanently delete account"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deleteBusy}
+                    onClick={() => {
+                      setDeleteConfirmOpen(false);
+                      setDeleteConfirmText("");
+                      setDeleteError("");
+                    }}
+                    style={{
+                      width: "100%",
+                      border: `1px solid ${theme.border}`,
+                      background: "transparent",
+                      color: theme.muted,
+                      padding: "10px 16px",
+                      borderRadius: "12px",
+                      fontWeight: 800,
+                      cursor: deleteBusy ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+
             <button
               type="button"
-              onClick={() => setAccountOpen(false)}
+              disabled={deleteBusy}
+              onClick={() => {
+                setAccountOpen(false);
+                setDeleteConfirmOpen(false);
+                setDeleteConfirmText("");
+                setDeleteError("");
+              }}
               style={{
                 width: "100%",
                 marginTop: "10px",

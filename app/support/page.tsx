@@ -34,9 +34,9 @@ export default function SupportPage() {
 
       <h2>Accounts</h2>
       <p>
-        If you already have an EasyMath account, you can open Account in the
-        app to see your email and sign out. There is not currently an in-app
-        delete-account button.
+        If you already have an EasyMath account, open Account in the app to see
+        your email, sign out, or permanently delete your account and saved
+        cloud progress (you will be asked to type DELETE to confirm).
       </p>
     </LegalShell>
   );
