@@ -39,6 +39,7 @@ import {
   type PracticeDifficultyNudge,
 } from "@/lib/progress";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import SiteFooter from "./site-footer";
 import {
   canUseLocalSolver,
   consumeLocalSolver,
@@ -5056,22 +5057,7 @@ export default function Home() {
           </aside>
         </div>
 
-        <p
-          style={{
-            textAlign: "center",
-
-            color: theme.muted,
-
-            marginTop: "24px",
-
-            fontSize: "13px",
-
-            fontWeight: 600,
-          }}
-        >
-          EasyMath AI • Learn the method, not just the
-          answer.
-        </p>
+        <SiteFooter compact muted={theme.muted} />
       </div>
 
       {authModalOpen && (
