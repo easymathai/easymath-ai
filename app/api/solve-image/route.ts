@@ -180,7 +180,66 @@ function detectImageMime(buffer: Buffer): string | null {
   return null;
 }
 
-function isHeicHeif(buffer: Buffer, file: File): boolean {
+type BinaryUploadPart = {
+  arrayBuffer: () => Promise<ArrayBuffer>;
+  type?: string;
+  name?: string;
+};
+
+type ImageUploadMeta = {
+  filename: string;
+  mimeType: string;
+};
+
+/**
+ * Accept browser File parts and Blob/file-like multipart parts (e.g. Expo).
+ * Reject strings and other non-binary form fields.
+ */
+function asBinaryUploadPart(
+  value: FormDataEntryValue | null
+): BinaryUploadPart | null {
+  if (value == null || typeof value === "string") {
+    return null;
+  }
+
+  if (typeof value !== "object") {
+    return null;
+  }
+
+  if (typeof File !== "undefined" && value instanceof File) {
+    return value;
+  }
+
+  if (typeof Blob !== "undefined" && value instanceof Blob) {
+    return value;
+  }
+
+  const candidate = value as { arrayBuffer?: unknown };
+
+  if (typeof candidate.arrayBuffer === "function") {
+    return candidate as BinaryUploadPart;
+  }
+
+  return null;
+}
+
+function uploadFilename(part: BinaryUploadPart): string {
+  if (typeof part.name === "string" && part.name.trim()) {
+    return part.name.trim();
+  }
+
+  return "upload.bin";
+}
+
+function uploadMimeType(part: BinaryUploadPart): string {
+  if (typeof part.type === "string" && part.type.trim()) {
+    return part.type.trim();
+  }
+
+  return "";
+}
+
+function isHeicHeif(buffer: Buffer, meta: ImageUploadMeta): boolean {
   if (buffer.length >= 12 && buffer.toString("ascii", 4, 8) === "ftyp") {
     const header = buffer
       .subarray(8, Math.min(buffer.length, 64))
@@ -192,8 +251,8 @@ function isHeicHeif(buffer: Buffer, file: File): boolean {
     }
   }
 
-  const type = file.type.toLowerCase();
-  const name = file.name.toLowerCase();
+  const type = meta.mimeType.toLowerCase();
+  const name = meta.filename.toLowerCase();
 
   return (
     type.includes("heic") ||
@@ -222,7 +281,7 @@ async function heicToJpeg(buffer: Buffer): Promise<Buffer> {
 }
 
 async function prepareImageForOpenAI(
-  file: File,
+  meta: ImageUploadMeta,
   buffer: Buffer
 ): Promise<{ mimeType: string; imageBuffer: Buffer }> {
   const mimeType = detectImageMime(buffer);
@@ -231,7 +290,7 @@ async function prepareImageForOpenAI(
     return { mimeType, imageBuffer: buffer };
   }
 
-  if (isHeicHeif(buffer, file)) {
+  if (isHeicHeif(buffer, meta)) {
     const jpegBuffer = await heicToJpeg(buffer);
     return { mimeType: "image/jpeg", imageBuffer: jpegBuffer };
   }
@@ -293,24 +352,28 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData();
 
-    const file = formData.get("image");
+    const imagePart = asBinaryUploadPart(formData.get("image"));
     const level = parseStudentLevel(formData.get("level"));
     // Extra form fields (usageMode, plan, unlimited, etc.) are ignored.
 
-    if (!(file instanceof File)) {
+    if (!imagePart) {
       return NextResponse.json(
         { error: "No image uploaded." },
         { status: 400 }
       );
     }
 
-    const bytes = await file.arrayBuffer();
+    const bytes = await imagePart.arrayBuffer();
     const buffer = Buffer.from(bytes);
+    const uploadMeta: ImageUploadMeta = {
+      filename: uploadFilename(imagePart),
+      mimeType: uploadMimeType(imagePart),
+    };
 
     let prepared: { mimeType: string; imageBuffer: Buffer };
 
     try {
-      prepared = await prepareImageForOpenAI(file, buffer);
+      prepared = await prepareImageForOpenAI(uploadMeta, buffer);
     } catch (error) {
       if (error instanceof Error && error.message === "UNSUPPORTED_IMAGE") {
         return NextResponse.json(
