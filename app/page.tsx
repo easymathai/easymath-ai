@@ -1482,7 +1482,11 @@ export default function Home() {
       const headers = await authHeaders({
         "Content-Type": "application/json",
       });
-      const practiceToken = practiceTokens[practiceIndex] || "";
+      // Only send the signed token when it belongs to the question on screen.
+      const practiceToken =
+        (practiceSet[practiceIndex] || "").trim() === practiceQuestion.trim()
+          ? practiceTokens[practiceIndex] || ""
+          : "";
 
       const response = await fetch("/api/check-practice", {
         method: "POST",
