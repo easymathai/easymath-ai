@@ -1,6 +1,13 @@
 "use client";
 
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ChangeEvent,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   authHeaders,
   cloudAccountsAvailable,
@@ -391,6 +398,10 @@ export default function Home() {
   ];
 
   useEffect(() => {
+    // Hydrate saved preferences from localStorage after mount. This must run
+    // after hydration (localStorage is not available during SSR), so it is a
+    // deliberate one-time sync from an external store.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHasMounted(true);
 
     const savedHistory = localStorage.getItem("easymath-history");
@@ -468,6 +479,11 @@ export default function Home() {
     }
   }, []);
 
+  // Effect events always call the latest loaders without re-subscribing to
+  // Supabase auth changes on every render.
+  const onAuthSignedIn = useEffectEvent(() => loadCloudProfileAndUsage());
+  const onAuthSignedOut = useEffectEvent(() => loadGuestUsage());
+
   useEffect(() => {
     if (!cloudEnabled) {
       return;
@@ -491,14 +507,14 @@ export default function Home() {
       if (state.user?.email) {
         setSignedIn(true);
         setUserEmail(state.user.email);
-        await loadCloudProfileAndUsage();
+        await onAuthSignedIn();
       } else {
         setSignedIn(false);
         setUserEmail(null);
         setUserPlan("free");
         setSolverUnlimited(false);
         cloudReadyRef.current = false;
-        await loadGuestUsage();
+        await onAuthSignedOut();
       }
     }
 
@@ -514,14 +530,14 @@ export default function Home() {
       if (session?.user?.email) {
         setSignedIn(true);
         setUserEmail(session.user.email);
-        void loadCloudProfileAndUsage();
+        void onAuthSignedIn();
       } else {
         setSignedIn(false);
         setUserEmail(null);
         setUserPlan("free");
         setSolverUnlimited(false);
         cloudReadyRef.current = false;
-        void loadGuestUsage();
+        void onAuthSignedOut();
       }
     });
 
@@ -564,8 +580,13 @@ export default function Home() {
     practiceMistakes,
   ]);
 
-  useEffect(() => {
-    practiceRequestRef.current += 1;
+  // Reset practice state whenever the solver result changes. Done during
+  // render (React's "adjust state when a value changes" pattern) instead of
+  // inside an effect, which avoided an extra cascading render.
+  const [practiceStateSolution, setPracticeStateSolution] = useState(solution);
+
+  if (practiceStateSolution !== solution) {
+    setPracticeStateSolution(solution);
     setPracticeAnswer("");
     setPracticeChecking(false);
     setPracticeFeedback("");
@@ -585,6 +606,11 @@ export default function Home() {
     setPracticeCompleted(false);
     setPracticeSource(null);
     setPracticeLaunchError("");
+  }
+
+  useEffect(() => {
+    // Invalidate any in-flight practice request from the previous solution.
+    practiceRequestRef.current += 1;
   }, [solution]);
 
   function saveHistory(items: HistoryItem[]) {
@@ -2403,34 +2429,22 @@ export default function Home() {
     ? "Unlimited solver questions"
     : `${dailyUsed} of ${dailyLimit} questions used today`;
 
-  useEffect(() => {
-    const seedQuestion = solverPracticeQuestion || parsedPracticeQuestion;
+  // Seed the practice set with the solver's practice question. Adjusted during
+  // render rather than in an effect (no cascading render); converges because
+  // practiceSet becomes non-empty.
+  const seedPracticeQuestion = solverPracticeQuestion || parsedPracticeQuestion;
 
-    if (
-      !seedQuestion ||
-      practiceCompleted ||
-      practiceGenerating ||
-      practiceLaunchError
-    ) {
-      return;
-    }
-
-    if (practiceSet.length > 0) {
-      return;
-    }
-
-    setPracticeSet([seedQuestion]);
+  if (
+    seedPracticeQuestion &&
+    !practiceCompleted &&
+    !practiceGenerating &&
+    !practiceLaunchError &&
+    practiceSet.length === 0
+  ) {
+    setPracticeSet([seedPracticeQuestion]);
     setPracticeTokens(solverPracticeToken ? [solverPracticeToken] : []);
     setPracticeIndex(0);
-  }, [
-    parsedPracticeQuestion,
-    practiceCompleted,
-    practiceSet.length,
-    solverPracticeToken,
-    solverPracticeQuestion,
-    practiceGenerating,
-    practiceLaunchError,
-  ]);
+  }
 
   useEffect(() => {
     if (practiceSource !== "recommended") {
@@ -3315,6 +3329,8 @@ export default function Home() {
 
               {imagePreview && (
                 <div>
+                  {/* Local blob: preview of the chosen photo; next/image can't optimize object URLs. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={imagePreview}
                     alt="Math problem preview"
