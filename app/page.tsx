@@ -1051,6 +1051,60 @@ export default function Home() {
     }
   }
 
+  async function handleForgotPassword() {
+    if (authBusyRef.current) {
+      return;
+    }
+
+    const supabase = getSupabaseBrowserClient();
+
+    if (!supabase) {
+      setAuthMessage(
+        "Cloud accounts aren't available yet. You can still use EasyMath on this device."
+      );
+      return;
+    }
+
+    const email = authEmail.trim();
+
+    if (!email || !email.includes("@")) {
+      setAuthMessage("Enter your account email above, then tap Forgot password? again.");
+      return;
+    }
+
+    authBusyRef.current = true;
+    setAuthBusy(true);
+    setAuthMessage("");
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (error) {
+        const lower = error.message.toLowerCase();
+
+        if (lower.includes("rate") || lower.includes("too many") || lower.includes("seconds")) {
+          setAuthMessage("Too many reset requests. Please wait a minute and try again.");
+          return;
+        }
+
+        setAuthMessage("We couldn't send a reset email right now. Please try again.");
+        return;
+      }
+
+      // Same message whether or not the account exists (no account enumeration).
+      setAuthMessage(
+        "If an account exists for that email, we've sent a password reset link. Check your inbox (and spam folder)."
+      );
+    } catch {
+      setAuthMessage("Unable to reach the account service. Please try again.");
+    } finally {
+      authBusyRef.current = false;
+      setAuthBusy(false);
+    }
+  }
+
   async function handleLogout() {
     const supabase = getSupabaseBrowserClient();
 
@@ -5316,6 +5370,27 @@ export default function Home() {
                 }}
               />
             </label>
+
+            {authMode === "login" && (
+              <div style={{ marginTop: "8px", textAlign: "right" }}>
+                <button
+                  type="button"
+                  onClick={() => void handleForgotPassword()}
+                  disabled={authBusy}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    color: darkMode ? "#93c5fd" : "#1d4ed8",
+                    fontWeight: 800,
+                    fontSize: "13px",
+                    cursor: authBusy ? "wait" : "pointer",
+                    padding: 0,
+                  }}
+                >
+                  Forgot password?
+                </button>
+              </div>
+            )}
 
             {authMessage && (
               <div
