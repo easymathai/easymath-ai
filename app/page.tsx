@@ -11,6 +11,8 @@ import {
   DAILY_LIMIT_MESSAGE,
   FREE_DAILY_SOLVER_LIMIT,
   FREE_PLAN_NAME,
+  IMAGE_TOO_LARGE_MESSAGE,
+  MAX_IMAGE_UPLOAD_BYTES,
   utcUsageDate,
 } from "@/lib/constants";
 import {
@@ -1319,6 +1321,12 @@ export default function Home() {
       return;
     }
 
+    if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      setMessage(IMAGE_TOO_LARGE_MESSAGE);
+      event.target.value = "";
+      return;
+    }
+
     setImageFile(file);
     setSolution("");
     setMessage("");
@@ -1363,6 +1371,12 @@ export default function Home() {
         headers,
         body: formData,
       });
+
+      if (response.status === 413) {
+        // The hosting platform may reject large bodies with a non-JSON page.
+        setSolution(IMAGE_TOO_LARGE_MESSAGE);
+        return;
+      }
 
       const data = await response.json();
 
