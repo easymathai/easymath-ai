@@ -5,6 +5,14 @@ import {
   PRACTICE_TOKEN_CONFIG_MESSAGE,
   signPracticeQuestions,
 } from "@/lib/practice-token";
+import {
+  enforcePracticeRateLimit,
+  withPracticeGuestCookie,
+} from "@/lib/practice-rate-limit";
+
+const MAX_ORIGINAL_QUESTION_CHARS = 1000;
+const MAX_AVOID_ITEMS = 20;
+const MAX_AVOID_ITEM_CHARS = 300;
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -159,23 +167,51 @@ function normalizeQuestion(value: string): string {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    let body: Record<string, unknown>;
+
+    try {
+      const parsed = await request.json();
+      body = parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return NextResponse.json(
+        { error: "Please send a valid practice request." },
+        { status: 400 }
+      );
+    }
+
     const originalQuestion =
       typeof body.originalQuestion === "string" ? body.originalQuestion.trim() : "";
+
+    if (originalQuestion.length > MAX_ORIGINAL_QUESTION_CHARS) {
+      return NextResponse.json(
+        { error: "That question is too long for practice. Please shorten it." },
+        { status: 400 }
+      );
+    }
+
     const previousPracticeQuestion =
       typeof body.previousPracticeQuestion === "string"
-        ? body.previousPracticeQuestion.trim()
+        ? body.previousPracticeQuestion.trim().slice(0, MAX_AVOID_ITEM_CHARS)
         : "";
-    const previousQuestions = Array.isArray(body.previousQuestions)
-      ? body.previousQuestions.filter(
-          (item: unknown): item is string =>
-            typeof item === "string" && item.trim().length > 0
-        )
+    const previousQuestions: string[] = Array.isArray(body.previousQuestions)
+      ? body.previousQuestions
+          .filter(
+            (item: unknown): item is string =>
+              typeof item === "string" && item.trim().length > 0
+          )
+          .slice(-MAX_AVOID_ITEMS)
+          .map((item: string) => item.trim().slice(0, MAX_AVOID_ITEM_CHARS))
       : [];
     const level = parseStudentLevel(body.level);
     const topic = parsePracticeTopic(body.topic);
     const ease = parsePracticeEase(body.ease);
     const count = Math.min(5, Math.max(1, Number(body.count) || 1));
+
+    const limited = await enforcePracticeRateLimit(request, "generate");
+
+    if (!limited.ok) {
+      return limited.response;
+    }
 
     const avoid = [
       originalQuestion,
@@ -237,14 +273,17 @@ ${count > 1 ? `Return exactly ${count} questions.` : ""}
       );
     }
 
-    return jsonWithPracticeCookie(
-      {
-        practiceQuestion: selected[0],
-        practiceToken: issued.tokens[0],
-        practiceQuestions: selected,
-        practiceTokens: issued.tokens,
-      },
-      issued.guestSidToSet
+    return withPracticeGuestCookie(
+      jsonWithPracticeCookie(
+        {
+          practiceQuestion: selected[0],
+          practiceToken: issued.tokens[0],
+          practiceQuestions: selected,
+          practiceTokens: issued.tokens,
+        },
+        issued.guestSidToSet
+      ),
+      limited.guestCookieToSet
     );
   } catch (error) {
     console.error("generate-practice error:", error);

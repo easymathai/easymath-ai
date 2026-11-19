@@ -1479,15 +1479,19 @@ export default function Home() {
     const practiceWhenChecked = practiceQuestion;
 
     try {
+      const headers = await authHeaders({
+        "Content-Type": "application/json",
+      });
+      const practiceToken = practiceTokens[practiceIndex] || "";
+
       const response = await fetch("/api/check-practice", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify({
           practiceQuestion,
           studentAnswer: practiceAnswer,
           level: studentLevel,
+          ...(practiceToken ? { practiceToken } : {}),
         }),
       });
 
@@ -1676,11 +1680,13 @@ export default function Home() {
     reviewCheckBusyRef.current = true;
 
     try {
+      const headers = await authHeaders({
+        "Content-Type": "application/json",
+      });
+
       const response = await fetch("/api/check-practice", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify({
           practiceQuestion: current.question,
           studentAnswer: reviewAnswer,
