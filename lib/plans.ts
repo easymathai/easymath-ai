@@ -21,9 +21,34 @@ export function getDailySolverLimitForPlan(plan: UserPlan): number | null {
   }
 }
 
-/** Normalize a stored plan value; unknown/missing values become Free. */
-export function resolveUserPlan(planFromProfile?: string | null): UserPlan {
+/** True when a Pro expiry timestamp is present and has already passed. */
+export function isProExpiryPassed(expiresAt?: string | Date | null): boolean {
+  if (expiresAt == null || expiresAt === "") {
+    return false;
+  }
+
+  const expires = expiresAt instanceof Date ? expiresAt : new Date(expiresAt);
+
+  if (Number.isNaN(expires.getTime())) {
+    return false;
+  }
+
+  return expires.getTime() <= Date.now();
+}
+
+/**
+ * Normalize a stored plan value; unknown/missing values become Free.
+ * Expired Pro is treated as Free at read time.
+ */
+export function resolveUserPlan(
+  planFromProfile?: string | null,
+  expiresAt?: string | Date | null
+): UserPlan {
   if (typeof planFromProfile === "string" && planFromProfile.trim().toLowerCase() === "pro") {
+    if (isProExpiryPassed(expiresAt)) {
+      return "free";
+    }
+
     return "pro";
   }
 
@@ -43,4 +68,52 @@ export function isSolverLimitReached(
   }
 
   return used >= limit;
+}
+
+/**
+ * Parse an optional expiry from the owner tools.
+ * A YYYY-MM-DD value is inclusive through the end of that UTC day.
+ * Returns null when no expiry was given, or "invalid" when it cannot be parsed.
+ */
+export function parseExpiryDateInput(value: unknown): Date | null | "invalid" {
+  if (value == null || value === "") {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    return "invalid";
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+
+  if (day) {
+    const year = Number(day[1]);
+    const month = Number(day[2]);
+    const date = Number(day[3]);
+    const parsed = new Date(Date.UTC(year, month - 1, date, 23, 59, 59, 999));
+
+    if (
+      parsed.getUTCFullYear() !== year ||
+      parsed.getUTCMonth() !== month - 1 ||
+      parsed.getUTCDate() !== date
+    ) {
+      return "invalid";
+    }
+
+    return parsed;
+  }
+
+  const parsed = new Date(trimmed);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return "invalid";
+  }
+
+  return parsed;
 }

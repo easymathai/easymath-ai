@@ -10,6 +10,7 @@ create table if not exists public.profiles (
   email text,
   plan text not null default 'free'
     check (plan in ('free', 'pro')),
+  plan_expires_at timestamptz,
   student_level text not null default 'middle'
     check (student_level in ('primary', 'middle', 'high', 'advanced')),
   practice_topic text not null default 'mixed'
@@ -58,7 +59,8 @@ create policy "profiles_insert_own"
   with check (auth.uid() = id);
 
 -- Prevent authenticated end-users from self-upgrading plan via client writes.
--- Privileged SQL Editor / service_role updates can still set plan = 'pro'.
+-- Privileged SQL Editor / service_role updates can still set plan = 'pro'
+-- and plan_expires_at.
 create or replace function public.protect_profile_plan()
 returns trigger
 language plpgsql
@@ -75,11 +77,13 @@ begin
 
   if tg_op = 'INSERT' then
     new.plan := 'free';
+    new.plan_expires_at := null;
     return new;
   end if;
 
   if tg_op = 'UPDATE' then
     new.plan := old.plan;
+    new.plan_expires_at := old.plan_expires_at;
     return new;
   end if;
 
@@ -112,6 +116,24 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
+
+-- Owner plan grant/revoke audit. RLS on, no client policies; service_role only.
+create table if not exists public.owner_plan_audit (
+  id uuid primary key default gen_random_uuid(),
+  actor_email text not null,
+  target_user_id uuid references auth.users (id) on delete set null,
+  target_email text not null,
+  from_plan text not null,
+  to_plan text not null,
+  from_plan_expires_at timestamptz,
+  to_plan_expires_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+alter table public.owner_plan_audit enable row level security;
+
+revoke all on table public.owner_plan_audit from anon, authenticated, public;
+grant all on table public.owner_plan_audit to service_role;
 
 -- ---------------------------------------------------------------------------
 -- 2) Daily solver usage (Free plan: 10 text+photo solves per UTC day)

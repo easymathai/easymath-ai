@@ -37,7 +37,7 @@ export async function GET(request: Request) {
   const { data, error } = await auth.supabase
     .from("profiles")
     .select(
-      "email, plan, student_level, practice_topic, questions_solved, practice_attempted, practice_correct, activity, practice_progress, solver_history, dashboard_stats, updated_at"
+      "email, plan, plan_expires_at, student_level, practice_topic, questions_solved, practice_attempted, practice_correct, activity, practice_progress, solver_history, dashboard_stats, updated_at"
     )
     .eq("id", auth.user.id)
     .maybeSingle();
@@ -85,7 +85,7 @@ export async function GET(request: Request) {
     });
   }
 
-  const plan = resolveUserPlan(data.plan);
+  const plan = resolveUserPlan(data.plan, data.plan_expires_at);
 
   return NextResponse.json({
     email: data.email || auth.user.email || "",
@@ -170,7 +170,7 @@ export async function PUT(request: Request) {
     .from("profiles")
     .upsert(payload, { onConflict: "id" })
     .select(
-      "email, plan, student_level, practice_topic, questions_solved, practice_attempted, practice_correct, activity, practice_progress, solver_history, dashboard_stats"
+      "email, plan, plan_expires_at, student_level, practice_topic, questions_solved, practice_attempted, practice_correct, activity, practice_progress, solver_history, dashboard_stats"
     )
     .single();
 
@@ -182,7 +182,7 @@ export async function PUT(request: Request) {
     );
   }
 
-  const plan = resolveUserPlan(data.plan);
+  const plan = resolveUserPlan(data.plan, data.plan_expires_at);
 
   return NextResponse.json({
     email: data.email || auth.user.email || "",

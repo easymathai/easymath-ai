@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
+import { AUTH_SESSION_COOKIE, readCookieValue } from "../auth-session-cookie";
 import { resolveUserPlan, type UserPlan } from "../plans";
 import { getSupabasePublicKey, getSupabaseUrl, isSupabaseConfigured } from "./config";
 
@@ -59,10 +60,18 @@ export function getBearerToken(request: Request): string | null {
   return match?.[1]?.trim() || null;
 }
 
-export async function getRequestUser(
-  request: Request
-): Promise<{ user: User; token: string; supabase: SupabaseClient } | null> {
-  const token = getBearerToken(request);
+export function getRequestAccessToken(request: Request): string | null {
+  return getBearerToken(request) || readCookieValue(request.headers.get("cookie"), AUTH_SESSION_COOKIE);
+}
+
+export type RequestUser = {
+  user: User;
+  token: string;
+  supabase: SupabaseClient;
+};
+
+export async function getRequestUser(request: Request): Promise<RequestUser | null> {
+  const token = getRequestAccessToken(request);
 
   if (!token) {
     return null;
@@ -93,7 +102,7 @@ export async function getUserPlanFromProfile(
 ): Promise<UserPlan> {
   const { data, error } = await supabase
     .from("profiles")
-    .select("plan")
+    .select("plan, plan_expires_at")
     .eq("id", userId)
     .maybeSingle();
 
@@ -102,7 +111,7 @@ export async function getUserPlanFromProfile(
     return "free";
   }
 
-  return resolveUserPlan(data?.plan);
+  return resolveUserPlan(data?.plan, data?.plan_expires_at);
 }
 
 export type ClaimUsageResult = {
