@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Third-party minified assets (self-hosted KaTeX for the mobile app).
+    "public/vendor/**",
   ]),
 ]);
 
