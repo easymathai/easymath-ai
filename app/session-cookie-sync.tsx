@@ -1,11 +1,30 @@
 "use client";
 
 import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
-/** Keeps a short-lived httpOnly session cookie in sync with the browser login. */
+function isOwnerConsoleSurface(pathname: string | null): boolean {
+  if (pathname?.startsWith("/owner")) {
+    return true;
+  }
+
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return window.location.hostname.toLowerCase() === "owner.easymathai.com";
+}
+
+/** Keeps a short-lived httpOnly session cookie in sync with the public-site login. */
 export default function SessionCookieSync() {
+  const pathname = usePathname();
+
   useEffect(() => {
+    if (isOwnerConsoleSurface(pathname)) {
+      return;
+    }
+
     const supabase = getSupabaseBrowserClient();
 
     if (!supabase) {
@@ -35,7 +54,7 @@ export default function SessionCookieSync() {
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [pathname]);
 
   return null;
 }

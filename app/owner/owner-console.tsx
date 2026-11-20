@@ -1,8 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
-import Link from "next/link";
-import { authHeaders } from "@/lib/client-auth";
+import { useRouter } from "next/navigation";
+import Image from "next/image";
+import { getOwnerSupabaseBrowserClient } from "@/lib/supabase/owner-client";
+
+type ConsoleRole = "developer" | "owner" | "staff";
 
 type OwnerUser = {
   email: string;
@@ -14,7 +17,39 @@ type OwnerUser = {
   lastSignInAt: string | null;
 };
 
-function formatDateTime(value: string | null): string {
+type StaffMember = {
+  email: string;
+  role: "staff";
+  addedBy: string;
+  createdAt: string;
+};
+
+type ActivityEvent = {
+  id: string;
+  email: string;
+  role: string;
+  event: "sign_in" | "sign_out";
+  ip: string | null;
+  userAgent: string | null;
+  createdAt: string;
+};
+
+type DeveloperInfo = {
+  appVersion: string;
+  commitSha: string | null;
+  commitRef: string | null;
+  vercelEnv: string | null;
+  supabaseProjectId: string | null;
+  audits: {
+    plan: Array<Record<string, unknown>>;
+    staff: Array<Record<string, unknown>>;
+    auth: Array<Record<string, unknown>>;
+  };
+};
+
+const DUBAI_TZ = "Asia/Dubai";
+
+function formatDubai(value: string | null | undefined): string {
   if (!value) {
     return "—";
   }
@@ -25,39 +60,35 @@ function formatDateTime(value: string | null): string {
     return "—";
   }
 
-  return date.toLocaleString(undefined, {
+  return `${date.toLocaleString("en-GB", {
+    timeZone: DUBAI_TZ,
     dateStyle: "medium",
     timeStyle: "short",
-  });
-}
-
-function formatExpiry(value: string | null): string {
-  if (!value) {
-    return "—";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "—";
-  }
-
-  return date.toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+  })} (Asia/Dubai)`;
 }
 
 function planSummary(user: OwnerUser): string {
   if (user.expired) {
-    return "Free (Pro expired)";
+    return `Free (Pro expired ${formatDubai(user.planExpiresAt)})`;
   }
 
   if (user.plan === "pro") {
-    return user.planExpiresAt ? `Pro until ${formatExpiry(user.planExpiresAt)}` : "Pro";
+    return user.planExpiresAt ? `Pro until ${formatDubai(user.planExpiresAt)}` : "Pro";
   }
 
   return "Free";
+}
+
+function roleLabel(role: ConsoleRole): string {
+  if (role === "developer") {
+    return "Developer";
+  }
+
+  if (role === "owner") {
+    return "Owner";
+  }
+
+  return "Staff";
 }
 
 const fieldStyle: CSSProperties = {
@@ -81,75 +112,117 @@ const primaryButton: CSSProperties = {
   cursor: "pointer",
 };
 
-const softButton: CSSProperties = {
+const secondaryButton: CSSProperties = {
   border: "1px solid #334155",
-  background: "#1e293b",
+  background: "transparent",
   color: "#e5e7eb",
-  padding: "8px 12px",
-  borderRadius: "10px",
+  padding: "11px 16px",
+  borderRadius: "12px",
   fontWeight: 800,
-  fontSize: "13px",
   cursor: "pointer",
 };
 
+const cardStyle: CSSProperties = {
+  background: "#0f172a",
+  border: "1px solid #1e293b",
+  borderRadius: 16,
+  padding: 20,
+};
+
 export default function OwnerConsole() {
+  const router = useRouter();
+  const [email, setEmail] = useState<string>("");
+  const [role, setRole] = useState<ConsoleRole | null>(null);
+  const [lastSignInAt, setLastSignInAt] = useState<string | null>(null);
+  const [lastSignOutAt, setLastSignOutAt] = useState<string | null>(null);
   const [users, setUsers] = useState<OwnerUser[]>([]);
   const [query, setQuery] = useState("");
-  const [email, setEmail] = useState("");
-  const [expiresAt, setExpiresAt] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [targetEmail, setTargetEmail] = useState("");
+  const [expiry, setExpiry] = useState("");
+  const [planMessage, setPlanMessage] = useState<string | null>(null);
+  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [staffEmail, setStaffEmail] = useState("");
+  const [staffMessage, setStaffMessage] = useState<string | null>(null);
+  const [events, setEvents] = useState<ActivityEvent[]>([]);
+  const [developer, setDeveloper] = useState<DeveloperInfo | null>(null);
+  const [auditTab, setAuditTab] = useState<"plan" | "staff" | "auth">("plan");
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const loadUsers = useCallback(async (search?: string) => {
-    setError("");
-    const headers = await authHeaders();
-    const params = new URLSearchParams();
-    const q = (search ?? query).trim();
+  const canManageStaff = role === "owner" || role === "developer";
+  const isDeveloper = role === "developer";
 
-    if (q) {
-      params.set("q", q);
-    }
+  const load = useCallback(async () => {
+    const sessionRes = await fetch("/api/owner/session", { cache: "no-store" });
 
-    const response = await fetch(`/api/owner/users${params.toString() ? `?${params}` : ""}`, {
-      headers,
-    });
-
-    if (response.status === 404) {
-      window.location.replace("/owner");
+    if (!sessionRes.ok) {
+      router.replace("/owner/login");
+      router.refresh();
       return;
     }
 
-    if (!response.ok) {
-      setError("Unable to load users right now.");
-      setUsers([]);
-      return;
+    const session = (await sessionRes.json()) as {
+      email: string;
+      role: ConsoleRole;
+      lastSignInAt: string | null;
+      lastSignOutAt: string | null;
+    };
+
+    setLoadError(null);
+    setEmail(session.email);
+    setRole(session.role);
+    setLastSignInAt(session.lastSignInAt);
+    setLastSignOutAt(session.lastSignOutAt);
+
+    const [usersRes, activityRes] = await Promise.all([
+      fetch("/api/owner/users", { cache: "no-store" }),
+      fetch("/api/owner/activity", { cache: "no-store" }),
+    ]);
+
+    if (usersRes.ok) {
+      const data = (await usersRes.json()) as { users: OwnerUser[] };
+      setUsers(data.users || []);
+    } else {
+      setLoadError("Unable to load users right now.");
     }
 
-    const json = (await response.json()) as { users?: OwnerUser[] };
-    setUsers(Array.isArray(json.users) ? json.users : []);
-  }, [query]);
+    if (activityRes.ok) {
+      const data = (await activityRes.json()) as {
+        lastSignInAt: string | null;
+        lastSignOutAt: string | null;
+        events: ActivityEvent[];
+      };
+      setLastSignInAt(data.lastSignInAt);
+      setLastSignOutAt(data.lastSignOutAt);
+      setEvents(data.events || []);
+    }
+
+    if (session.role === "owner" || session.role === "developer") {
+      const staffRes = await fetch("/api/owner/staff", { cache: "no-store" });
+
+      if (staffRes.ok) {
+        const data = (await staffRes.json()) as { staff: StaffMember[] };
+        setStaff(data.staff || []);
+      }
+    }
+
+    if (session.role === "developer") {
+      const devRes = await fetch("/api/owner/developer", { cache: "no-store" });
+
+      if (devRes.ok) {
+        setDeveloper((await devRes.json()) as DeveloperInfo);
+      }
+    }
+  }, [router]);
 
   useEffect(() => {
-    let cancelled = false;
+    const timeout = window.setTimeout(() => {
+      void load();
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [load]);
 
-    void (async () => {
-      setLoading(true);
-      await loadUsers("");
-      if (!cancelled) {
-        setLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-    // Load once on mount. Search is applied from the form.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const visibleUsers = useMemo(() => {
+  const filteredUsers = useMemo(() => {
     const q = query.trim().toLowerCase();
 
     if (!q) {
@@ -159,310 +232,404 @@ export default function OwnerConsole() {
     return users.filter((user) => user.email.toLowerCase().includes(q));
   }, [query, users]);
 
-  async function updatePlan(targetEmail: string, plan: "free" | "pro", expiry?: string) {
+  async function updatePlan(plan: "free" | "pro") {
+    setPlanMessage(null);
+    const emailValue = targetEmail.trim().toLowerCase();
+
+    if (!emailValue) {
+      setPlanMessage("Enter the account email first.");
+      return;
+    }
+
     setBusy(true);
-    setError("");
-    setMessage("");
 
     try {
-      const headers = await authHeaders({ "Content-Type": "application/json" });
       const response = await fetch("/api/owner/plan", {
         method: "POST",
-        headers,
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: targetEmail,
+          email: emailValue,
           plan,
-          expiresAt: plan === "pro" && expiry ? expiry : null,
+          expiresAt: plan === "pro" ? expiry : null,
         }),
       });
-
-      const json = (await response.json().catch(() => ({}))) as { error?: string };
-
-      if (response.status === 404 && json.error === "Not found.") {
-        window.location.replace("/owner");
-        return;
-      }
+      const data = (await response.json()) as { error?: string; email?: string };
 
       if (!response.ok) {
-        setError(json.error || "Unable to update that plan right now.");
+        setPlanMessage(data.error || "Unable to update that plan right now.");
         return;
       }
 
-      setMessage(
+      setPlanMessage(
         plan === "pro"
-          ? `Pro granted to ${targetEmail}.`
-          : `Pro revoked for ${targetEmail}.`
+          ? `Pro granted to ${data.email || emailValue}.`
+          : `Pro revoked for ${data.email || emailValue}.`
       );
-      await loadUsers("");
+      setTargetEmail("");
+      setExpiry("");
+      await load();
     } finally {
       setBusy(false);
     }
   }
 
-  async function handleGrant(event: FormEvent) {
+  async function addStaff(event: FormEvent) {
     event.preventDefault();
+    setStaffMessage(null);
+    const value = staffEmail.trim().toLowerCase();
 
-    const target = email.trim();
-
-    if (!target) {
-      setError("Enter the email of an existing account.");
+    if (!value) {
+      setStaffMessage("Enter a staff email.");
       return;
     }
 
-    await updatePlan(target, "pro", expiresAt.trim());
+    setBusy(true);
+
+    try {
+      const response = await fetch("/api/owner/staff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: value }),
+      });
+      const data = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        setStaffMessage(data.error || "Unable to add staff right now.");
+        return;
+      }
+
+      setStaffMessage(`Added ${value} as staff.`);
+      setStaffEmail("");
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeStaff(memberEmail: string) {
+    setStaffMessage(null);
+    setBusy(true);
+
+    try {
+      const response = await fetch("/api/owner/staff", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: memberEmail }),
+      });
+      const data = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        setStaffMessage(data.error || "Unable to remove staff right now.");
+        return;
+      }
+
+      setStaffMessage(`Removed ${memberEmail} from staff.`);
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function signOut() {
+    setBusy(true);
+
+    try {
+      await fetch("/api/owner/session", { method: "DELETE" });
+      const supabase = getOwnerSupabaseBrowserClient();
+      await supabase?.auth.signOut();
+    } finally {
+      router.replace("/owner/login");
+      router.refresh();
+      setBusy(false);
+    }
   }
 
   return (
     <main
       style={{
         minHeight: "100vh",
-        background:
-          "radial-gradient(circle at top left, #1e3a8a 0%, transparent 28%), radial-gradient(circle at bottom right, #4c1d95 0%, transparent 28%), #0f172a",
+        background: "#080d18",
         color: "#e5e7eb",
-        padding: "22px 16px 36px",
-        fontFamily:
-          "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
-        letterSpacing: "-0.011em",
+        padding: "28px 18px 64px",
+        fontFamily: "ui-sans-serif, system-ui, sans-serif",
       }}
     >
-      <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
+      <div style={{ maxWidth: 980, margin: "0 auto", display: "grid", gap: 20 }}>
         <header
           style={{
-            background: "rgba(15,23,42,0.94)",
-            border: "1px solid #334155",
-            borderRadius: "22px",
-            padding: "18px 20px",
-            marginBottom: "18px",
             display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: "12px",
             flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 16,
           }}
         >
           <div>
-            <div
+            <p
               style={{
+                margin: 0,
+                fontSize: 12,
+                letterSpacing: "0.16em",
+                textTransform: "uppercase",
                 color: "#a78bfa",
-                fontSize: "11px",
-                fontWeight: 900,
-                letterSpacing: "0.08em",
+                fontWeight: 700,
               }}
             >
-              EASYMATH AI
-            </div>
-            <div
-              style={{
-                marginTop: "4px",
-                fontWeight: 900,
-                fontSize: "22px",
-                letterSpacing: "-0.03em",
-              }}
-            >
-              Owner tools
-            </div>
-            <div style={{ marginTop: "6px", color: "#94a3b8", fontWeight: 600, fontSize: "13px" }}>
-              Grant or revoke Pro for existing accounts. No payments.
-            </div>
+              EasyMath AI
+            </p>
+            <h1 style={{ margin: "6px 0 0", fontSize: 28, color: "white" }}>Owner console</h1>
           </div>
-          <Link
-            href="/"
-            style={{
-              border: "1px solid #334155",
-              background: "#1e293b",
-              color: "#e5e7eb",
-              padding: "9px 14px",
-              borderRadius: "999px",
-              fontWeight: 800,
-              fontSize: "13px",
-              textDecoration: "none",
-            }}
-          >
-            Back to EasyMath
-          </Link>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            {email ? (
+              <>
+                <span style={{ fontWeight: 700, fontSize: 14 }}>{email}</span>
+                {role ? (
+                  <span
+                    style={{
+                      background: role === "developer" ? "#312e81" : role === "owner" ? "#4c1d95" : "#1e293b",
+                      color: role === "staff" ? "#cbd5e1" : "#ddd6fe",
+                      border: "1px solid #5b21b6",
+                      borderRadius: 999,
+                      padding: "4px 10px",
+                      fontSize: 12,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {roleLabel(role)}
+                  </span>
+                ) : null}
+              </>
+            ) : null}
+            <button type="button" onClick={() => void signOut()} disabled={busy} style={secondaryButton}>
+              Sign out
+            </button>
+          </div>
         </header>
 
-        <section
-          style={{
-            background: "rgba(15,23,42,0.94)",
-            border: "1px solid #334155",
-            borderRadius: "24px",
-            padding: "22px 20px",
-            marginBottom: "18px",
-          }}
-        >
-          <div style={{ fontWeight: 900, fontSize: "16px", marginBottom: "14px" }}>
-            Grant Pro
-          </div>
-          <form
-            onSubmit={(event) => void handleGrant(event)}
-            style={{
-              display: "grid",
-              gap: "12px",
-              gridTemplateColumns: "minmax(0, 1.4fr) minmax(0, 0.8fr) auto",
-              alignItems: "end",
-            }}
-            className="owner-grant-form"
-          >
-            <label style={{ display: "grid", gap: "6px" }}>
-              <span style={{ color: "#94a3b8", fontWeight: 700, fontSize: "12px" }}>
-                Account email
-              </span>
-              <input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="student@example.com"
-                style={fieldStyle}
-                required
-              />
-            </label>
-            <label style={{ display: "grid", gap: "6px" }}>
-              <span style={{ color: "#94a3b8", fontWeight: 700, fontSize: "12px" }}>
-                Expiry date (optional)
-              </span>
-              <input
-                type="date"
-                value={expiresAt}
-                onChange={(event) => setExpiresAt(event.target.value)}
-                style={fieldStyle}
-              />
-            </label>
-            <button type="submit" disabled={busy} style={{ ...primaryButton, opacity: busy ? 0.7 : 1 }}>
-              Grant Pro
-            </button>
-          </form>
-          <div style={{ marginTop: "10px", color: "#94a3b8", fontSize: "13px", fontWeight: 600 }}>
-            Leave the expiry blank for no end date. The date is inclusive through the end of that UTC day.
+        <section style={cardStyle}>
+          <h2 style={{ margin: 0, fontSize: 18, color: "white" }}>Plans</h2>
+          <p style={{ margin: "8px 0 16px", color: "#94a3b8", fontSize: 14 }}>
+            Grant or revoke Pro for an existing EasyMath account. Expiry is optional and inclusive of that date.
+          </p>
+          <div style={{ display: "grid", gap: 12, maxWidth: 520 }}>
+            <input
+              style={fieldStyle}
+              placeholder="Account email"
+              value={targetEmail}
+              onChange={(event) => setTargetEmail(event.target.value)}
+            />
+            <input
+              style={fieldStyle}
+              type="date"
+              value={expiry}
+              onChange={(event) => setExpiry(event.target.value)}
+              aria-label="Optional Pro expiry date"
+            />
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button type="button" style={primaryButton} disabled={busy} onClick={() => void updatePlan("pro")}>
+                Grant Pro
+              </button>
+              <button type="button" style={secondaryButton} disabled={busy} onClick={() => void updatePlan("free")}>
+                Revoke Pro
+              </button>
+            </div>
+            {planMessage ? <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#c4b5fd" }}>{planMessage}</p> : null}
           </div>
         </section>
 
-        <section
-          style={{
-            background: "rgba(15,23,42,0.94)",
-            border: "1px solid #334155",
-            borderRadius: "24px",
-            padding: "22px 20px",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              gap: "12px",
-              flexWrap: "wrap",
-              alignItems: "center",
-              marginBottom: "14px",
-            }}
-          >
-            <div style={{ fontWeight: 900, fontSize: "16px" }}>
-              Users {loading ? "" : `(${visibleUsers.length})`}
-            </div>
+        <section style={cardStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <h2 style={{ margin: 0, fontSize: 18, color: "white" }}>Accounts</h2>
             <input
-              type="search"
+              style={{ ...fieldStyle, maxWidth: 280 }}
+              placeholder="Search email"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search by email"
-              style={{ ...fieldStyle, maxWidth: "320px" }}
             />
           </div>
-
-          {error ? (
-            <div style={{ color: "#fca5a5", fontWeight: 700, marginBottom: "12px" }}>{error}</div>
-          ) : null}
-          {message ? (
-            <div style={{ color: "#86efac", fontWeight: 700, marginBottom: "12px" }}>{message}</div>
-          ) : null}
-
-          <div style={{ overflowX: "auto" }}>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                fontSize: "14px",
-              }}
-            >
+          {loadError ? <p style={{ color: "#fda4af" }}>{loadError}</p> : null}
+          <div style={{ overflowX: "auto", marginTop: 12 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ textAlign: "left", color: "#94a3b8" }}>
-                  {["Email", "Plan", "Pro expiry", "Confirmed", "Last sign-in", ""].map((label) => (
-                    <th
-                      key={label || "actions"}
-                      style={{
-                        padding: "10px 8px",
-                        fontWeight: 800,
-                        fontSize: "12px",
-                        letterSpacing: "0.04em",
-                        borderBottom: "1px solid #334155",
-                      }}
-                    >
-                      {label}
-                    </th>
-                  ))}
+                  <th style={{ padding: "8px 6px" }}>Email</th>
+                  <th style={{ padding: "8px 6px" }}>Plan</th>
+                  <th style={{ padding: "8px 6px" }}>Confirmed</th>
+                  <th style={{ padding: "8px 6px" }}>Last app sign-in</th>
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
-                  <tr>
-                    <td colSpan={6} style={{ padding: "18px 8px", color: "#94a3b8" }}>
-                      Loading users…
-                    </td>
+                {filteredUsers.map((user) => (
+                  <tr key={user.email} style={{ borderTop: "1px solid #1e293b" }}>
+                    <td style={{ padding: "8px 6px", fontWeight: 700 }}>{user.email}</td>
+                    <td style={{ padding: "8px 6px" }}>{planSummary(user)}</td>
+                    <td style={{ padding: "8px 6px" }}>{user.confirmed ? "Yes" : "No"}</td>
+                    <td style={{ padding: "8px 6px" }}>{formatDubai(user.lastSignInAt)}</td>
                   </tr>
-                ) : visibleUsers.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} style={{ padding: "18px 8px", color: "#94a3b8" }}>
-                      No users match that search.
-                    </td>
-                  </tr>
-                ) : (
-                  visibleUsers.map((user) => (
-                    <tr key={user.email} style={{ borderBottom: "1px solid #1e293b" }}>
-                      <td style={{ padding: "12px 8px", fontWeight: 700 }}>{user.email}</td>
-                      <td style={{ padding: "12px 8px", fontWeight: 700 }}>{planSummary(user)}</td>
-                      <td style={{ padding: "12px 8px", color: "#cbd5e1" }}>
-                        {user.storedPlan === "pro" ? formatExpiry(user.planExpiresAt) : "—"}
-                      </td>
-                      <td style={{ padding: "12px 8px" }}>{user.confirmed ? "Yes" : "No"}</td>
-                      <td style={{ padding: "12px 8px", color: "#cbd5e1", whiteSpace: "nowrap" }}>
-                        {formatDateTime(user.lastSignInAt)}
-                      </td>
-                      <td style={{ padding: "12px 8px", textAlign: "right" }}>
-                        {user.storedPlan === "pro" || user.plan === "pro" ? (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void updatePlan(user.email, "free")}
-                            style={softButton}
-                          >
-                            Revoke Pro
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => {
-                              setEmail(user.email);
-                            }}
-                            style={softButton}
-                          >
-                            Use email
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
+                ))}
               </tbody>
             </table>
+            {filteredUsers.length === 0 ? (
+              <p style={{ color: "#94a3b8", fontSize: 13 }}>No accounts to show.</p>
+            ) : null}
           </div>
         </section>
+
+        {canManageStaff ? (
+          <section style={cardStyle}>
+            <h2 style={{ margin: 0, fontSize: 18, color: "white" }}>Staff</h2>
+            <p style={{ margin: "8px 0 16px", color: "#94a3b8", fontSize: 14 }}>
+              Staff can sign in to this console and grant or revoke Pro. They cannot add or remove staff.
+              They must already have a confirmed EasyMath account.
+            </p>
+            <form onSubmit={(event) => void addStaff(event)} style={{ display: "flex", gap: 10, flexWrap: "wrap", maxWidth: 640 }}>
+              <input
+                style={{ ...fieldStyle, flex: 1, minWidth: 220 }}
+                placeholder="Staff email"
+                value={staffEmail}
+                onChange={(event) => setStaffEmail(event.target.value)}
+              />
+              <button type="submit" style={primaryButton} disabled={busy}>
+                Add staff
+              </button>
+            </form>
+            {staffMessage ? <p style={{ fontSize: 13, fontWeight: 600, color: "#c4b5fd" }}>{staffMessage}</p> : null}
+            <div style={{ overflowX: "auto", marginTop: 12 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ textAlign: "left", color: "#94a3b8" }}>
+                    <th style={{ padding: "8px 6px" }}>Email</th>
+                    <th style={{ padding: "8px 6px" }}>Added by</th>
+                    <th style={{ padding: "8px 6px" }}>Added</th>
+                    <th style={{ padding: "8px 6px" }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {staff.map((member) => (
+                    <tr key={member.email} style={{ borderTop: "1px solid #1e293b" }}>
+                      <td style={{ padding: "8px 6px", fontWeight: 700 }}>{member.email}</td>
+                      <td style={{ padding: "8px 6px" }}>{member.addedBy}</td>
+                      <td style={{ padding: "8px 6px" }}>{formatDubai(member.createdAt)}</td>
+                      <td style={{ padding: "8px 6px" }}>
+                        <button
+                          type="button"
+                          style={secondaryButton}
+                          disabled={busy}
+                          onClick={() => void removeStaff(member.email)}
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {staff.length === 0 ? <p style={{ color: "#94a3b8", fontSize: 13 }}>No staff added yet.</p> : null}
+            </div>
+          </section>
+        ) : null}
+
+        <section style={cardStyle}>
+          <h2 style={{ margin: 0, fontSize: 18, color: "white" }}>Sign-in activity</h2>
+          <p style={{ margin: "8px 0 16px", color: "#94a3b8", fontSize: 14 }}>Times are shown in Asia/Dubai.</p>
+          <p style={{ margin: "0 0 8px", fontSize: 14 }}>
+            <strong>Last sign-in:</strong> {formatDubai(lastSignInAt)}
+          </p>
+          <p style={{ margin: "0 0 16px", fontSize: 14 }}>
+            <strong>Last sign-out:</strong> {formatDubai(lastSignOutAt)}
+          </p>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ textAlign: "left", color: "#94a3b8" }}>
+                  <th style={{ padding: "8px 6px" }}>When</th>
+                  <th style={{ padding: "8px 6px" }}>Email</th>
+                  <th style={{ padding: "8px 6px" }}>Event</th>
+                  <th style={{ padding: "8px 6px" }}>Role</th>
+                  <th style={{ padding: "8px 6px" }}>IP</th>
+                </tr>
+              </thead>
+              <tbody>
+                {events.map((event) => (
+                  <tr key={event.id} style={{ borderTop: "1px solid #1e293b" }}>
+                    <td style={{ padding: "8px 6px" }}>{formatDubai(event.createdAt)}</td>
+                    <td style={{ padding: "8px 6px", fontWeight: 700 }}>{event.email}</td>
+                    <td style={{ padding: "8px 6px" }}>{event.event === "sign_in" ? "Sign in" : "Sign out"}</td>
+                    <td style={{ padding: "8px 6px" }}>{event.role}</td>
+                    <td style={{ padding: "8px 6px" }}>{event.ip || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {events.length === 0 ? <p style={{ color: "#94a3b8", fontSize: 13 }}>No console sign-in activity yet.</p> : null}
+          </div>
+        </section>
+
+        {isDeveloper && developer ? (
+          <section style={cardStyle}>
+            <h2 style={{ margin: 0, fontSize: 18, color: "white" }}>Developer</h2>
+            <div style={{ display: "grid", gap: 6, marginTop: 12, fontSize: 14 }}>
+              <p style={{ margin: 0 }}>
+                <strong>App version:</strong> {developer.appVersion}
+              </p>
+              <p style={{ margin: 0 }}>
+                <strong>Commit SHA:</strong> {developer.commitSha || "—"}
+              </p>
+              <p style={{ margin: 0 }}>
+                <strong>Git branch:</strong> {developer.commitRef || "—"}
+              </p>
+              <p style={{ margin: 0 }}>
+                <strong>Vercel env:</strong> {developer.vercelEnv || "—"}
+              </p>
+              <p style={{ margin: 0 }}>
+                <strong>Supabase project id:</strong> {developer.supabaseProjectId || "—"}
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+              {(["plan", "staff", "auth"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setAuditTab(tab)}
+                  style={auditTab === tab ? primaryButton : secondaryButton}
+                >
+                  {tab === "plan" ? "Plan audit" : tab === "staff" ? "Staff audit" : "Auth audit"}
+                </button>
+              ))}
+            </div>
+            <pre
+              style={{
+                marginTop: 12,
+                background: "#080d18",
+                border: "1px solid #1e293b",
+                borderRadius: 12,
+                padding: 12,
+                overflowX: "auto",
+                fontSize: 12,
+                color: "#cbd5e1",
+              }}
+            >
+              {JSON.stringify(developer.audits[auditTab], null, 2)}
+            </pre>
+          </section>
+        ) : null}
+
+        <p
+          style={{
+            marginTop: 8,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            color: "#94a3b8",
+            fontSize: 13,
+            fontWeight: 600,
+          }}
+        >
+          <span>by</span>
+          <Image src="/branding/zayir-ai-logo-purple-dark.png" alt="zayir.ai" width={24} height={24} />
+        </p>
       </div>
-      <style>{`
-        @media (max-width: 800px) {
-          .owner-grant-form {
-            grid-template-columns: 1fr !important;
-          }
-        }
-      `}</style>
     </main>
   );
 }

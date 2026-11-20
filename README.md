@@ -44,9 +44,9 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 - **Password recovery**: add `https://easymathai.com/reset-password` (and any preview/local
   origins you use, e.g. `http://localhost:3000/reset-password`) to Supabase →
   Authentication → URL Configuration → Redirect URLs.
-- **Owner tools**: set the server-only `OWNER_EMAILS` variable in Vercel
-  (comma-separated, never `NEXT_PUBLIC_`). These tools are not linked from the
-  public site.
+- **Owner tools**: set the server-only `OWNER_EMAILS` and `DEVELOPER_EMAILS`
+  variables in Vercel (comma-separated, never `NEXT_PUBLIC_`). These tools are
+  not linked from the public site.
 - **Photo uploads**: the API rejects images over 10 MB. Note that Vercel Functions also cap
   request bodies at about 4.5 MB, so very large photos are rejected by the platform first
   (the app shows the same friendly "photo is too large" message).

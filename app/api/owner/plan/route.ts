@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireOwner } from "@/lib/owner";
+import { requireConsoleAccess } from "@/lib/owner";
 import { parseExpiryDateInput, type UserPlan } from "@/lib/plans";
 import {
   createSupabaseAdminClient,
@@ -23,10 +23,10 @@ function normalizeEmail(value: unknown): string | null {
 }
 
 export async function POST(request: Request) {
-  const owner = await requireOwner(request);
+  const access = await requireConsoleAccess(request);
 
-  if (!owner.ok) {
-    return owner.response;
+  if (!access.ok) {
+    return access.response;
   }
 
   if (!isSupabaseAdminConfigured()) {
@@ -150,7 +150,7 @@ export async function POST(request: Request) {
   }
 
   const { error: auditError } = await admin.from("owner_plan_audit").insert({
-    actor_email: owner.auth.user.email || "",
+    actor_email: access.auth.user.email || "",
     target_user_id: target.id,
     target_email: target.email || email,
     from_plan: fromPlan,

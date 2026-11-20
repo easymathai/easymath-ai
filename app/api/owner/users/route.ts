@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireOwner } from "@/lib/owner";
+import { isDeveloperEmail, requireConsoleAccess } from "@/lib/owner";
 import { isProExpiryPassed, resolveUserPlan } from "@/lib/plans";
 import {
   createSupabaseAdminClient,
@@ -16,10 +16,10 @@ type ProfileRow = {
 };
 
 export async function GET(request: Request) {
-  const owner = await requireOwner(request);
+  const access = await requireConsoleAccess(request);
 
-  if (!owner.ok) {
-    return owner.response;
+  if (!access.ok) {
+    return access.response;
   }
 
   if (!isSupabaseAdminConfigured()) {
@@ -39,6 +39,7 @@ export async function GET(request: Request) {
   }
 
   const query = new URL(request.url).searchParams.get("q")?.trim().toLowerCase() || "";
+  const hideDeveloperAccounts = access.auth.role !== "developer";
 
   const authUsers: Array<{
     id: string;
@@ -102,6 +103,7 @@ export async function GET(request: Request) {
     })
     .filter((user) => user.email)
     .filter((user) => (query ? user.email.toLowerCase().includes(query) : true))
+    .filter((user) => !(hideDeveloperAccounts && isDeveloperEmail(user.email)))
     .sort((a, b) => a.email.localeCompare(b.email));
 
   return NextResponse.json({ users });
