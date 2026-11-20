@@ -5,7 +5,7 @@ import { createSupabaseUserClient, getRequestUser, type RequestUser } from "./su
  * Server-only owner check. Do not import this module from client components.
  * Owner emails are never sent to the browser.
  */
-const DEFAULT_OWNER_EMAILS = "riyaz@eliteglobalcargo.com,hello@zayir.ai";
+const DEFAULT_OWNER_EMAILS = "hello@zayir.ai";
 
 export function getOwnerEmails(): string[] {
   const raw = process.env.OWNER_EMAILS?.trim() || DEFAULT_OWNER_EMAILS;
