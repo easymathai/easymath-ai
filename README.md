@@ -34,3 +34,16 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Version 2 setup notes
+
+- **Practice abuse limits**: run `supabase/add_practice_rate_limits.sql` once in the Supabase SQL Editor.
+  Until it is applied, `/api/generate-practice` and `/api/check-practice` fall back to a
+  best-effort in-memory limiter per server instance. The RPC is called with the server-only
+  `SUPABASE_SECRET_KEY` (must be set in Vercel for the shared limiter to be used).
+- **Password recovery**: add `https://easymathai.com/reset-password` (and any preview/local
+  origins you use, e.g. `http://localhost:3000/reset-password`) to Supabase →
+  Authentication → URL Configuration → Redirect URLs.
+- **Photo uploads**: the API rejects images over 10 MB. Note that Vercel Functions also cap
+  request bodies at about 4.5 MB, so very large photos are rejected by the platform first
+  (the app shows the same friendly "photo is too large" message).

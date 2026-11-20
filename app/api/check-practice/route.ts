@@ -1,5 +1,13 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
+import { verifyPracticeToken } from "@/lib/practice-token";
+import {
+  enforcePracticeRateLimit,
+  withPracticeGuestCookie,
+} from "@/lib/practice-rate-limit";
+
+const MAX_QUESTION_CHARS = 600;
+const MAX_ANSWER_CHARS = 200;
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -102,7 +110,18 @@ function parseCheckResult(text: string): {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    let body: Record<string, unknown>;
+
+    try {
+      const parsedBody = await request.json();
+      body = parsedBody && typeof parsedBody === "object" ? parsedBody : {};
+    } catch {
+      return NextResponse.json(
+        { error: "Please enter an answer to check." },
+        { status: 400 }
+      );
+    }
+
     const practiceQuestion = body.practiceQuestion;
     const studentAnswer = body.studentAnswer;
     const level = parseStudentLevel(body.level);
@@ -126,6 +145,58 @@ export async function POST(request: Request) {
         { error: "Please enter an answer to check." },
         { status: 400 }
       );
+    }
+
+    if (practiceQuestion.trim().length > MAX_QUESTION_CHARS) {
+      return NextResponse.json(
+        { error: "That practice question is too long to check." },
+        { status: 400 }
+      );
+    }
+
+    if (studentAnswer.trim().length > MAX_ANSWER_CHARS) {
+      return NextResponse.json(
+        { error: "Please keep your answer short (just the final answer)." },
+        { status: 400 }
+      );
+    }
+
+    // Practice questions issued by generate-practice / the solver carry a signed
+    // token bound to the question and the user/guest. When a token is sent it
+    // must be valid. Requests without a token (e.g. reviewing saved mistakes,
+    // which may be days old or synced from another device) are still allowed
+    // but use a much tighter abuse limit.
+    const hasToken =
+      typeof body.practiceToken === "string" && body.practiceToken.trim().length > 0;
+
+    if (hasToken) {
+      const verified = await verifyPracticeToken(
+        request,
+        practiceQuestion,
+        body.practiceToken
+      );
+
+      if (!verified.ok) {
+        return NextResponse.json(
+          {
+            error:
+              verified.status === 503
+                ? verified.error
+                : "This practice question isn't valid anymore. Generate a new practice question and try again.",
+            code: "PRACTICE_TOKEN_INVALID",
+          },
+          { status: verified.status }
+        );
+      }
+    }
+
+    const limited = await enforcePracticeRateLimit(
+      request,
+      hasToken ? "check" : "check-unverified"
+    );
+
+    if (!limited.ok) {
+      return limited.response;
     }
 
     const response = await openai.responses.create(
@@ -181,11 +252,14 @@ If the student is incorrect:
       );
     }
 
-    return NextResponse.json({
-      correct: parsed.correct,
-      feedback: parsed.feedback,
-      hint: parsed.hint,
-    });
+    return withPracticeGuestCookie(
+      NextResponse.json({
+        correct: parsed.correct,
+        feedback: parsed.feedback,
+        hint: parsed.hint,
+      }),
+      limited.guestCookieToSet
+    );
   } catch (error) {
     console.error("check-practice error:", error);
 

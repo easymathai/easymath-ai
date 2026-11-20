@@ -12,6 +12,20 @@ import {
   signPracticeQuestions,
 } from "@/lib/practice-token";
 import { attachGuestCookie } from "@/lib/guest-identity";
+import {
+  IMAGE_TOO_LARGE_MESSAGE,
+  MAX_IMAGE_UPLOAD_BYTES,
+} from "@/lib/constants";
+
+// Multipart overhead allowance on top of the image itself (boundaries, level field).
+const MAX_MULTIPART_OVERHEAD_BYTES = 64 * 1024;
+
+function imageTooLargeResponse(): NextResponse {
+  return NextResponse.json(
+    { error: IMAGE_TOO_LARGE_MESSAGE, code: "IMAGE_TOO_LARGE" },
+    { status: 413 }
+  );
+}
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -350,7 +364,27 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
-    const formData = await request.formData();
+    // Cheap early rejection before reading the body when the client declares
+    // its size. The real byte length is checked again below.
+    const declaredLength = Number(request.headers.get("content-length"));
+
+    if (
+      Number.isFinite(declaredLength) &&
+      declaredLength > MAX_IMAGE_UPLOAD_BYTES + MAX_MULTIPART_OVERHEAD_BYTES
+    ) {
+      return imageTooLargeResponse();
+    }
+
+    let formData: FormData;
+
+    try {
+      formData = await request.formData();
+    } catch {
+      return NextResponse.json(
+        { error: "No image uploaded." },
+        { status: 400 }
+      );
+    }
 
     const imagePart = asBinaryUploadPart(formData.get("image"));
     const level = parseStudentLevel(formData.get("level"));
@@ -363,7 +397,28 @@ export async function POST(request: Request) {
       );
     }
 
+    const declaredPartSize = (imagePart as { size?: unknown }).size;
+
+    if (
+      typeof declaredPartSize === "number" &&
+      declaredPartSize > MAX_IMAGE_UPLOAD_BYTES
+    ) {
+      return imageTooLargeResponse();
+    }
+
     const bytes = await imagePart.arrayBuffer();
+
+    if (bytes.byteLength > MAX_IMAGE_UPLOAD_BYTES) {
+      return imageTooLargeResponse();
+    }
+
+    if (bytes.byteLength === 0) {
+      return NextResponse.json(
+        { error: "That photo looks empty. Please choose another photo." },
+        { status: 400 }
+      );
+    }
+
     const buffer = Buffer.from(bytes);
     const uploadMeta: ImageUploadMeta = {
       filename: uploadFilename(imagePart),

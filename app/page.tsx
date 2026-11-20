@@ -1,6 +1,13 @@
 "use client";
 
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ChangeEvent,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   authHeaders,
   cloudAccountsAvailable,
@@ -11,6 +18,8 @@ import {
   DAILY_LIMIT_MESSAGE,
   FREE_DAILY_SOLVER_LIMIT,
   FREE_PLAN_NAME,
+  IMAGE_TOO_LARGE_MESSAGE,
+  MAX_IMAGE_UPLOAD_BYTES,
   utcUsageDate,
 } from "@/lib/constants";
 import {
@@ -389,6 +398,10 @@ export default function Home() {
   ];
 
   useEffect(() => {
+    // Hydrate saved preferences from localStorage after mount. This must run
+    // after hydration (localStorage is not available during SSR), so it is a
+    // deliberate one-time sync from an external store.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHasMounted(true);
 
     const savedHistory = localStorage.getItem("easymath-history");
@@ -466,6 +479,11 @@ export default function Home() {
     }
   }, []);
 
+  // Effect events always call the latest loaders without re-subscribing to
+  // Supabase auth changes on every render.
+  const onAuthSignedIn = useEffectEvent(() => loadCloudProfileAndUsage());
+  const onAuthSignedOut = useEffectEvent(() => loadGuestUsage());
+
   useEffect(() => {
     if (!cloudEnabled) {
       return;
@@ -489,14 +507,14 @@ export default function Home() {
       if (state.user?.email) {
         setSignedIn(true);
         setUserEmail(state.user.email);
-        await loadCloudProfileAndUsage();
+        await onAuthSignedIn();
       } else {
         setSignedIn(false);
         setUserEmail(null);
         setUserPlan("free");
         setSolverUnlimited(false);
         cloudReadyRef.current = false;
-        await loadGuestUsage();
+        await onAuthSignedOut();
       }
     }
 
@@ -512,14 +530,14 @@ export default function Home() {
       if (session?.user?.email) {
         setSignedIn(true);
         setUserEmail(session.user.email);
-        void loadCloudProfileAndUsage();
+        void onAuthSignedIn();
       } else {
         setSignedIn(false);
         setUserEmail(null);
         setUserPlan("free");
         setSolverUnlimited(false);
         cloudReadyRef.current = false;
-        void loadGuestUsage();
+        void onAuthSignedOut();
       }
     });
 
@@ -562,8 +580,13 @@ export default function Home() {
     practiceMistakes,
   ]);
 
-  useEffect(() => {
-    practiceRequestRef.current += 1;
+  // Reset practice state whenever the solver result changes. Done during
+  // render (React's "adjust state when a value changes" pattern) instead of
+  // inside an effect, which avoided an extra cascading render.
+  const [practiceStateSolution, setPracticeStateSolution] = useState(solution);
+
+  if (practiceStateSolution !== solution) {
+    setPracticeStateSolution(solution);
     setPracticeAnswer("");
     setPracticeChecking(false);
     setPracticeFeedback("");
@@ -583,6 +606,11 @@ export default function Home() {
     setPracticeCompleted(false);
     setPracticeSource(null);
     setPracticeLaunchError("");
+  }
+
+  useEffect(() => {
+    // Invalidate any in-flight practice request from the previous solution.
+    practiceRequestRef.current += 1;
   }, [solution]);
 
   function saveHistory(items: HistoryItem[]) {
@@ -1023,6 +1051,60 @@ export default function Home() {
     }
   }
 
+  async function handleForgotPassword() {
+    if (authBusyRef.current) {
+      return;
+    }
+
+    const supabase = getSupabaseBrowserClient();
+
+    if (!supabase) {
+      setAuthMessage(
+        "Cloud accounts aren't available yet. You can still use EasyMath on this device."
+      );
+      return;
+    }
+
+    const email = authEmail.trim();
+
+    if (!email || !email.includes("@")) {
+      setAuthMessage("Enter your account email above, then tap Forgot password? again.");
+      return;
+    }
+
+    authBusyRef.current = true;
+    setAuthBusy(true);
+    setAuthMessage("");
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (error) {
+        const lower = error.message.toLowerCase();
+
+        if (lower.includes("rate") || lower.includes("too many") || lower.includes("seconds")) {
+          setAuthMessage("Too many reset requests. Please wait a minute and try again.");
+          return;
+        }
+
+        setAuthMessage("We couldn't send a reset email right now. Please try again.");
+        return;
+      }
+
+      // Same message whether or not the account exists (no account enumeration).
+      setAuthMessage(
+        "If an account exists for that email, we've sent a password reset link. Check your inbox (and spam folder)."
+      );
+    } catch {
+      setAuthMessage("Unable to reach the account service. Please try again.");
+    } finally {
+      authBusyRef.current = false;
+      setAuthBusy(false);
+    }
+  }
+
   async function handleLogout() {
     const supabase = getSupabaseBrowserClient();
 
@@ -1319,6 +1401,12 @@ export default function Home() {
       return;
     }
 
+    if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      setMessage(IMAGE_TOO_LARGE_MESSAGE);
+      event.target.value = "";
+      return;
+    }
+
     setImageFile(file);
     setSolution("");
     setMessage("");
@@ -1363,6 +1451,12 @@ export default function Home() {
         headers,
         body: formData,
       });
+
+      if (response.status === 413) {
+        // The hosting platform may reject large bodies with a non-JSON page.
+        setSolution(IMAGE_TOO_LARGE_MESSAGE);
+        return;
+      }
 
       const data = await response.json();
 
@@ -1479,15 +1573,23 @@ export default function Home() {
     const practiceWhenChecked = practiceQuestion;
 
     try {
+      const headers = await authHeaders({
+        "Content-Type": "application/json",
+      });
+      // Only send the signed token when it belongs to the question on screen.
+      const practiceToken =
+        (practiceSet[practiceIndex] || "").trim() === practiceQuestion.trim()
+          ? practiceTokens[practiceIndex] || ""
+          : "";
+
       const response = await fetch("/api/check-practice", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify({
           practiceQuestion,
           studentAnswer: practiceAnswer,
           level: studentLevel,
+          ...(practiceToken ? { practiceToken } : {}),
         }),
       });
 
@@ -1676,11 +1778,13 @@ export default function Home() {
     reviewCheckBusyRef.current = true;
 
     try {
+      const headers = await authHeaders({
+        "Content-Type": "application/json",
+      });
+
       const response = await fetch("/api/check-practice", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify({
           practiceQuestion: current.question,
           studentAnswer: reviewAnswer,
@@ -2379,34 +2483,22 @@ export default function Home() {
     ? "Unlimited solver questions"
     : `${dailyUsed} of ${dailyLimit} questions used today`;
 
-  useEffect(() => {
-    const seedQuestion = solverPracticeQuestion || parsedPracticeQuestion;
+  // Seed the practice set with the solver's practice question. Adjusted during
+  // render rather than in an effect (no cascading render); converges because
+  // practiceSet becomes non-empty.
+  const seedPracticeQuestion = solverPracticeQuestion || parsedPracticeQuestion;
 
-    if (
-      !seedQuestion ||
-      practiceCompleted ||
-      practiceGenerating ||
-      practiceLaunchError
-    ) {
-      return;
-    }
-
-    if (practiceSet.length > 0) {
-      return;
-    }
-
-    setPracticeSet([seedQuestion]);
+  if (
+    seedPracticeQuestion &&
+    !practiceCompleted &&
+    !practiceGenerating &&
+    !practiceLaunchError &&
+    practiceSet.length === 0
+  ) {
+    setPracticeSet([seedPracticeQuestion]);
     setPracticeTokens(solverPracticeToken ? [solverPracticeToken] : []);
     setPracticeIndex(0);
-  }, [
-    parsedPracticeQuestion,
-    practiceCompleted,
-    practiceSet.length,
-    solverPracticeToken,
-    solverPracticeQuestion,
-    practiceGenerating,
-    practiceLaunchError,
-  ]);
+  }
 
   useEffect(() => {
     if (practiceSource !== "recommended") {
@@ -3291,6 +3383,8 @@ export default function Home() {
 
               {imagePreview && (
                 <div>
+                  {/* Local blob: preview of the chosen photo; next/image can't optimize object URLs. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={imagePreview}
                     alt="Math problem preview"
@@ -5276,6 +5370,27 @@ export default function Home() {
                 }}
               />
             </label>
+
+            {authMode === "login" && (
+              <div style={{ marginTop: "8px", textAlign: "right" }}>
+                <button
+                  type="button"
+                  onClick={() => void handleForgotPassword()}
+                  disabled={authBusy}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    color: darkMode ? "#93c5fd" : "#1d4ed8",
+                    fontWeight: 800,
+                    fontSize: "13px",
+                    cursor: authBusy ? "wait" : "pointer",
+                    padding: 0,
+                  }}
+                >
+                  Forgot password?
+                </button>
+              </div>
+            )}
 
             {authMessage && (
               <div
