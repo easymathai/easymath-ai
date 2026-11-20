@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import SiteFooter from "../site-footer";
+import BrandLogo from "../brand-logo";
 
 type Stage = "checking" | "ready" | "invalid" | "saving" | "done" | "unavailable";
 
@@ -171,14 +172,14 @@ export default function ResetPasswordPage() {
         <header style={{ marginBottom: "20px" }}>
           <Link
             href="/"
+            aria-label="EasyMath Ai home"
             style={{
-              color: "#e5e7eb",
+              display: "inline-flex",
+              alignItems: "center",
               textDecoration: "none",
-              fontWeight: 900,
-              fontSize: "18px",
             }}
           >
-            EasyMath AI
+            <BrandLogo variant="dark" />
           </Link>
         </header>
 

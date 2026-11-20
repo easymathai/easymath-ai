@@ -1,4 +1,4 @@
--- EasyMath AI — minimum Supabase schema
+-- EasyMath Ai — minimum Supabase schema
 -- Run this in the Supabase SQL Editor after creating your project.
 -- Requires: Authentication → Email provider enabled.
 

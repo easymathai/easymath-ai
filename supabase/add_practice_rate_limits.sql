@@ -1,4 +1,4 @@
--- EasyMath AI — Practice Mode abuse limits (version 2)
+-- EasyMath Ai — Practice Mode abuse limits (version 2)
 -- Run once in the Supabase SQL Editor. Safe to re-run.
 -- NOT applied automatically. Until it is applied, the app falls back to a
 -- best-effort in-memory limiter per server instance (see lib/practice-rate-limit.ts).

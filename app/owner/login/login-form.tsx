@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import BrandLogo from "../../brand-logo";
 import { getOwnerSupabaseBrowserClient } from "@/lib/supabase/owner-client";
 
 function resetRedirectUrl(): string {
@@ -142,18 +143,7 @@ export default function OwnerLoginForm() {
           boxShadow: "0 24px 80px rgba(0,0,0,0.35)",
         }}
       >
-        <p
-          style={{
-            margin: 0,
-            fontSize: 12,
-            letterSpacing: "0.16em",
-            textTransform: "uppercase",
-            color: "#a78bfa",
-            fontWeight: 700,
-          }}
-        >
-          EasyMath AI
-        </p>
+        <BrandLogo variant="dark" />
         <h1 style={{ margin: "10px 0 0", fontSize: 28, fontWeight: 800, color: "white" }}>
           Owner console
         </h1>

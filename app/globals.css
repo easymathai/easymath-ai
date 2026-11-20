@@ -24,3 +24,19 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.easymath-brand-logo {
+  display: block;
+  height: 36px;
+  width: auto;
+}
+
+.easymath-brand-logo--sm {
+  height: 32px;
+}
+
+@media (max-width: 520px) {
+  .easymath-brand-logo:not(.easymath-brand-logo--sm) {
+    height: 32px;
+  }
+}

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import SiteFooter from "./site-footer";
+import BrandLogo from "./brand-logo";
 
 export default function LegalShell({
   title,
@@ -46,15 +47,14 @@ export default function LegalShell({
         >
           <Link
             href="/"
+            aria-label="EasyMath Ai home"
             style={{
-              color: "#e5e7eb",
+              display: "inline-flex",
+              alignItems: "center",
               textDecoration: "none",
-              fontWeight: 900,
-              fontSize: "18px",
-              letterSpacing: "-0.03em",
             }}
           >
-            EasyMath AI
+            <BrandLogo variant="dark" />
           </Link>
           <Link
             href="/"

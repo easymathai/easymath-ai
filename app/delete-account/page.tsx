@@ -3,21 +3,21 @@ import LegalShell from "../legal-shell";
 import { getSupportEmail } from "@/lib/support";
 
 export const metadata: Metadata = {
-  title: "Delete account | EasyMath AI",
+  title: "Delete account | EasyMath Ai",
   description:
-    "How to delete your EasyMath AI account and the cloud progress saved to it.",
+    "How to delete your EasyMath Ai account and the cloud progress saved to it.",
 };
 
 export default function DeleteAccountPage() {
   const supportEmail = getSupportEmail();
   const mailHref = `mailto:${supportEmail}?subject=${encodeURIComponent("EasyMath account deletion request")}&body=${encodeURIComponent(
-    "Please delete my EasyMath AI account and the cloud progress saved to it.\n\nAccount email:\n\nAny other detail that will help us find the account:\n"
+    "Please delete my EasyMath Ai account and the cloud progress saved to it.\n\nAccount email:\n\nAny other detail that will help us find the account:\n"
   )}`;
 
   return (
     <LegalShell title="Delete account" updated="21 November 2026">
       <p>
-        You can delete your EasyMath AI account and the cloud progress saved to
+        You can delete your EasyMath Ai account and the cloud progress saved to
         it. This is permanent. It does not remove copies that may already be
         sitting in short-lived server logs or backups, and it does not delete
         progress that was only saved in a browser as a guest.
@@ -33,7 +33,7 @@ export default function DeleteAccountPage() {
           asked to type DELETE to confirm.
         </li>
         <li>
-          In the EasyMath AI Android app, open Account and choose Delete
+          In the EasyMath Ai Android app, open Account and choose Delete
           account, then type DELETE to confirm.
         </li>
       </ul>

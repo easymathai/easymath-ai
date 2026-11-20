@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
-  title: "Reset password | EasyMath AI",
-  description: "Choose a new password for your EasyMath AI account.",
+  title: "Reset password | EasyMath Ai",
+  description: "Choose a new password for your EasyMath Ai account.",
   robots: { index: false, follow: false },
 };
 

@@ -38,7 +38,7 @@ export async function POST(request: Request) {
 
       return NextResponse.json({ solution });
     } catch (error) {
-      console.error("EasyMath AI practice solution error:", error);
+      console.error("EasyMath Ai practice solution error:", error);
 
       return NextResponse.json(
         { error: "Unable to solve the question right now." },
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
       );
     }
   } catch (error) {
-    console.error("EasyMath AI practice solution error:", error);
+    console.error("EasyMath Ai practice solution error:", error);
 
     return NextResponse.json(
       { error: "Unable to solve the question right now." },

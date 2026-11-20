@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     } catch (error) {
       await releaseSolverReservation(gate);
 
-      console.error("EasyMath AI API error:", error);
+      console.error("EasyMath Ai API error:", error);
 
       return attachGuestCookie(
         NextResponse.json(
@@ -84,7 +84,7 @@ export async function POST(request: Request) {
         practiceGuestSid = issued.guestSidToSet;
       }
     } catch (error) {
-      console.error("EasyMath AI practice token error:", error);
+      console.error("EasyMath Ai practice token error:", error);
     }
 
     return attachGuestCookie(
@@ -100,7 +100,7 @@ export async function POST(request: Request) {
       gate.guestCookieToSet
     );
   } catch (error) {
-    console.error("EasyMath AI API error:", error);
+    console.error("EasyMath Ai API error:", error);
 
     return NextResponse.json(
       { error: "Unable to solve the question right now." },

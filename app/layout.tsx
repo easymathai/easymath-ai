@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "EasyMath AI – Your Personal AI Math Tutor",
+  title: "EasyMath Ai – Your Personal Ai Math Tutor",
   description:
     "AI-powered math tutor that helps students solve problems and understand every step.",
   manifest: "/site.webmanifest",

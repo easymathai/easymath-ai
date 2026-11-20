@@ -1,4 +1,4 @@
--- EasyMath AI — add trusted Free/Pro plan column to profiles
+-- EasyMath Ai — add trusted Free/Pro plan column to profiles
 -- Run once in the Supabase SQL Editor on existing projects.
 -- Safe for existing rows: defaults to 'free'. Does not reset progress/usage.
 

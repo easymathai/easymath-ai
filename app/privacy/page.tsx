@@ -3,9 +3,9 @@ import LegalShell from "../legal-shell";
 import { getSupportEmail } from "@/lib/support";
 
 export const metadata: Metadata = {
-  title: "Privacy | EasyMath AI",
+  title: "Privacy | EasyMath Ai",
   description:
-    "How EasyMath AI handles accounts, progress, math questions, photos, and related service data.",
+    "How EasyMath Ai handles accounts, progress, math questions, photos, and related service data.",
 };
 
 export default function PrivacyPage() {
@@ -14,7 +14,7 @@ export default function PrivacyPage() {
   return (
     <LegalShell title="Privacy" updated="21 November 2026">
       <p>
-        This page describes how EasyMath AI handles information, based on how
+        This page describes how EasyMath Ai handles information, based on how
         the current app works. It is not a certification, and it does not mean
         EasyMath is approved for every school or child-privacy law.
       </p>

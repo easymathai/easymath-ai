@@ -3,8 +3,8 @@ import LegalShell from "../legal-shell";
 import { getSupportEmail } from "@/lib/support";
 
 export const metadata: Metadata = {
-  title: "Support | EasyMath AI",
-  description: "How to get help with EasyMath AI.",
+  title: "Support | EasyMath Ai",
+  description: "How to get help with EasyMath Ai.",
 };
 
 export default function SupportPage() {
@@ -13,7 +13,7 @@ export default function SupportPage() {
   return (
     <LegalShell title="Support" updated="21 November 2026">
       <p>
-        EasyMath AI is an educational math tutor. Use this page if you need
+        EasyMath Ai is an educational math tutor. Use this page if you need
         help with the product.
       </p>
 

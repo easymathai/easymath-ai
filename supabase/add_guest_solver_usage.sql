@@ -1,4 +1,4 @@
--- EasyMath AI — guest solver daily usage (cookie identity)
+-- EasyMath Ai — guest solver daily usage (cookie identity)
 -- Run once in the Supabase SQL Editor on existing projects.
 -- Does NOT change profiles.plan, daily_usage, or signed-in Free/Pro RPCs.
 --

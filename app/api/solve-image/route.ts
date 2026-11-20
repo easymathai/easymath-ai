@@ -112,7 +112,7 @@ Return ONLY the math transcription on one line. No labels, no quotes, no explana
 `;
 
 const teacherInstructions = `
-You are EasyMath AI, an expert and friendly mathematics teacher.
+You are EasyMath Ai, an expert and friendly mathematics teacher.
 
 The student uploaded a photo of a handwritten or printed math problem.
 You will be given the exact transcription of that photo. Solve that transcription exactly.

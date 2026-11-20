@@ -49,6 +49,7 @@ import {
 } from "@/lib/progress";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import SiteFooter from "./site-footer";
+import BrandLogo from "./brand-logo";
 import {
   canUseLocalSolver,
   consumeLocalSolver,
@@ -1362,7 +1363,7 @@ export default function Home() {
 
       saveHistory(updatedHistory);
     } catch {
-      setSolution("We couldn't reach EasyMath AI. Please check your connection and try again.");
+      setSolution("We couldn't reach EasyMath Ai. Please check your connection and try again.");
     } finally {
       solverBusyRef.current = false;
       setLoading(false);
@@ -2697,49 +2698,19 @@ export default function Home() {
                 gap: "14px",
               }}
             >
-              <div
-                style={{
-                  width: "52px",
-                  height: "52px",
-                  borderRadius: "16px",
-                  display: "grid",
-                  placeItems: "center",
-
-                  background:
-                    "linear-gradient(135deg, #2563eb, #16a34a)",
-
-                  color: "white",
-                  fontSize: "26px",
-                  fontWeight: 900,
-                  boxShadow: "0 8px 18px rgba(37,99,235,0.28)",
-                }}
-              >
-                ∑
-              </div>
-
               <div>
-                <h1
-                  className="easymath-title"
-                  style={{
-                    margin: 0,
-                    fontSize: "30px",
-                    fontWeight: 900,
-                    letterSpacing: "-0.03em",
-                    lineHeight: 1.1,
-                  }}
-                >
-                  EasyMath AI
+                <h1 className="easymath-title" style={{ margin: 0 }}>
+                  <BrandLogo variant={darkMode ? "dark" : "light"} />
                 </h1>
-
                 <p
                   style={{
-                    margin: "5px 0 0",
+                    margin: "8px 0 0",
                     color: theme.muted,
                     fontWeight: 600,
                     fontSize: "14px",
                   }}
                 >
-                  Your Personal AI Math Tutor
+                  Your Personal Ai Math Tutor
                 </p>
               </div>
             </div>
@@ -5250,7 +5221,7 @@ export default function Home() {
           </aside>
         </div>
 
-        <SiteFooter compact muted={theme.muted} />
+        <SiteFooter compact muted={theme.muted} variant={darkMode ? "dark" : "light"} />
       </div>
 
       {authModalOpen && (
@@ -5761,7 +5732,7 @@ export default function Home() {
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="EasyMath AI plans"
+          aria-label="EasyMath Ai plans"
           style={{
             position: "fixed",
             inset: 0,
@@ -5816,7 +5787,7 @@ export default function Home() {
                     letterSpacing: "-0.03em",
                   }}
                 >
-                  Choose your EasyMath AI plan
+                  Choose your EasyMath Ai plan
                 </div>
                 <div
                   style={{

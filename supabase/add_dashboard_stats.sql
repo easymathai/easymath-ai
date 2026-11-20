@@ -1,4 +1,4 @@
--- EasyMath AI — signed-in dashboard streak + per-topic practice stats
+-- EasyMath Ai — signed-in dashboard streak + per-topic practice stats
 -- Run once in the Supabase SQL Editor on existing projects.
 -- Safe for existing rows: defaults to {}. Does not change plan, usage, or RLS.
 

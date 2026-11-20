@@ -1,4 +1,4 @@
--- EasyMath AI — STAGE B (post-deploy cleanup)
+-- EasyMath Ai — STAGE B (post-deploy cleanup)
 -- Run once in the Supabase SQL Editor AFTER the new Next.js app is deployed.
 -- Do NOT run from the app.
 -- Do NOT run this before Stage A (add_solver_reservations.sql) or before

@@ -1,4 +1,4 @@
--- EasyMath AI — Pro expiry + owner plan audit
+-- EasyMath Ai — Pro expiry + owner plan audit
 -- Safe to run on existing projects. Does not change existing plan values.
 -- Clients still cannot set plan or plan_expires_at (protect_profile_plan).
 

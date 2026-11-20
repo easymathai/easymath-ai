@@ -1,6 +1,6 @@
 import { FREE_DAILY_SOLVER_LIMIT, FREE_PLAN_NAME } from "./constants";
 
-/** Supported EasyMath AI plans. */
+/** Supported EasyMath Ai plans. */
 export type UserPlan = "free" | "pro";
 
 export const USER_PLANS: UserPlan[] = ["free", "pro"];

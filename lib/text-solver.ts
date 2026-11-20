@@ -69,7 +69,7 @@ Do not change numbers, algebra, or the correct result of the original problem.
 }
 
 const teacherInstructions = `
-You are EasyMath AI, an expert and friendly mathematics teacher.
+You are EasyMath Ai, an expert and friendly mathematics teacher.
 
 Your goal is not only to give the correct answer.
 Your goal is to help the student understand the method.
@@ -92,7 +92,7 @@ Accuracy rules:
 - Show enough working that a student can follow each step.
 - For equations, substitute the final value back into the original equation when practical, and mention that check in the steps.
 - Do not invent missing lengths, numbers, or assumptions. If a needed value is not given, say what is missing instead of guessing.
-- If the input is not actually a math problem, do not invent a calculation. In FINAL ANSWER, say clearly that it is not a math question. In the other sections, briefly explain that EasyMath AI solves school math questions and invite the student to type one.
+- If the input is not actually a math problem, do not invent a calculation. In FINAL ANSWER, say clearly that it is not a math question. In the other sections, briefly explain that EasyMath Ai solves school math questions and invite the student to type one.
 
 For EVERY response, follow this structure exactly. Use these heading lines unchanged:
 
@@ -136,7 +136,7 @@ Great job! 🌟 Keep practising and you'll become stronger at maths.
 `;
 
 const checkerInstructions = `
-You are an independent math checker for EasyMath AI.
+You are an independent math checker for EasyMath Ai.
 
 Check only for genuine math mistakes:
 - Is the FINAL ANSWER mathematically correct for the student's question?
@@ -264,7 +264,7 @@ The PRACTICE QUESTION in a correction must test the same concept with different 
 
     return originalSolution;
   } catch (error) {
-    console.error("EasyMath AI checker error:", error);
+    console.error("EasyMath Ai checker error:", error);
     return originalSolution;
   }
 }

@@ -1,14 +1,17 @@
 import Link from "next/link";
 import Image from "next/image";
+import BrandLogo from "./brand-logo";
 
 type SiteFooterProps = {
   muted?: string;
   compact?: boolean;
+  variant?: "light" | "dark";
 };
 
 export default function SiteFooter({
   muted = "#94a3b8",
   compact = false,
+  variant = "dark",
 }: SiteFooterProps) {
   return (
     <footer
@@ -47,7 +50,7 @@ export default function SiteFooter({
           Delete account
         </Link>
       </div>
-      <div style={{ marginTop: "8px" }}>© 2026 EasyMath AI</div>
+      <div style={{ marginTop: "8px" }}>© 2026 EasyMath Ai</div>
       <p
         style={{
           margin: "12px 0 0",
@@ -58,9 +61,11 @@ export default function SiteFooter({
           color: muted,
           fontSize: 13,
           fontWeight: 600,
+          flexWrap: "wrap",
         }}
       >
-        <span>EasyMath AI by</span>
+        <BrandLogo variant={variant} size="sm" />
+        <span>by</span>
         <Image
           src="/branding/zayir-ai-logo-purple-dark.png"
           alt="zayir.ai"

@@ -1,4 +1,4 @@
--- EasyMath AI — STAGE A (compatibility)
+-- EasyMath Ai — STAGE A (compatibility)
 -- Signed-in Free-plan solver reservations.
 -- Run once in the Supabase SQL Editor on existing projects.
 -- Do NOT run from the app.

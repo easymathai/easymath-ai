@@ -3,9 +3,9 @@ import LegalShell from "../legal-shell";
 import { getSupportEmail } from "@/lib/support";
 
 export const metadata: Metadata = {
-  title: "Terms | EasyMath AI",
+  title: "Terms | EasyMath Ai",
   description:
-    "Terms for using EasyMath AI, including educational use, AI answers, accounts, and the Free plan.",
+    "Terms for using EasyMath Ai, including educational use, AI answers, accounts, and the Free plan.",
 };
 
 export default function TermsPage() {
@@ -14,7 +14,7 @@ export default function TermsPage() {
   return (
     <LegalShell title="Terms">
       <p>
-        These terms are a simple V1 agreement for using EasyMath AI. By using
+        These terms are a simple V1 agreement for using EasyMath Ai. By using
         the app, you agree to them.
       </p>
 

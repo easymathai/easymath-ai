@@ -1,4 +1,4 @@
--- EasyMath AI — signed-in solver history (Recent Questions) on profiles
+-- EasyMath Ai — signed-in solver history (Recent Questions) on profiles
 -- Run once in the Supabase SQL Editor on existing projects.
 -- Safe for existing rows: defaults to []. Does not change plan, usage, or RLS.
 

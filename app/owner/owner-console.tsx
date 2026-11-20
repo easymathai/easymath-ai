@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import BrandLogo from "../brand-logo";
 import { getOwnerSupabaseBrowserClient } from "@/lib/supabase/owner-client";
 import {
   EXPIRY_PRESETS,
@@ -722,19 +723,8 @@ export default function OwnerConsole() {
           }}
         >
           <div>
-            <p
-              style={{
-                margin: 0,
-                fontSize: 12,
-                letterSpacing: "0.16em",
-                textTransform: "uppercase",
-                color: "#a78bfa",
-                fontWeight: 700,
-              }}
-            >
-              EasyMath AI
-            </p>
-            <h1 style={{ margin: "6px 0 0", fontSize: 28, color: "white" }}>Owner console</h1>
+            <BrandLogo variant="dark" />
+            <h1 style={{ margin: "10px 0 0", fontSize: 28, color: "white" }}>Owner console</h1>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             {email ? (
