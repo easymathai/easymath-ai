@@ -46,6 +46,7 @@ export async function GET(request: Request) {
     email?: string;
     email_confirmed_at?: string | null;
     last_sign_in_at?: string | null;
+    created_at?: string | null;
   }> = [];
 
   const perPage = 200;
@@ -99,6 +100,7 @@ export async function GET(request: Request) {
         expired: storedPlan === "pro" && isProExpiryPassed(planExpiresAt),
         confirmed: Boolean(user.email_confirmed_at),
         lastSignInAt: user.last_sign_in_at ?? null,
+        createdAt: user.created_at ?? null,
       };
     })
     .filter((user) => user.email)

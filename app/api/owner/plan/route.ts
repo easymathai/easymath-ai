@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireConsoleAccess } from "@/lib/owner";
+import { isDeveloperEmail, requireConsoleAccess } from "@/lib/owner";
 import { parseExpiryDateInput, type UserPlan } from "@/lib/plans";
 import {
   createSupabaseAdminClient,
@@ -20,6 +20,73 @@ function normalizeEmail(value: unknown): string | null {
   }
 
   return email;
+}
+
+
+type PlanAuditRow = {
+  id: string;
+  actor_email: string;
+  target_email: string;
+  from_plan: string;
+  to_plan: string;
+  from_plan_expires_at: string | null;
+  to_plan_expires_at: string | null;
+  created_at: string;
+};
+
+export async function GET(request: Request) {
+  const access = await requireConsoleAccess(request);
+
+  if (!access.ok) {
+    return access.response;
+  }
+
+  if (!isSupabaseAdminConfigured()) {
+    return NextResponse.json(
+      { error: "Owner tools are temporarily unavailable." },
+      { status: 503 }
+    );
+  }
+
+  const admin = createSupabaseAdminClient();
+
+  if (!admin) {
+    return NextResponse.json(
+      { error: "Owner tools are temporarily unavailable." },
+      { status: 503 }
+    );
+  }
+
+  const { data, error } = await admin
+    .from("owner_plan_audit")
+    .select(
+      "id, actor_email, target_email, from_plan, to_plan, from_plan_expires_at, to_plan_expires_at, created_at"
+    )
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (error) {
+    console.error("owner plan audit list failed");
+    return NextResponse.json({ error: "Unable to load recent changes right now." }, { status: 500 });
+  }
+
+  const hideDeveloper = access.auth.role !== "developer";
+
+  const changes = ((data || []) as PlanAuditRow[])
+    .filter((row) => !(hideDeveloper && isDeveloperEmail(row.target_email)))
+    .map((row) => ({
+      id: row.id,
+      actorEmail:
+        hideDeveloper && isDeveloperEmail(row.actor_email) ? "—" : row.actor_email,
+      targetEmail: row.target_email,
+      fromPlan: row.from_plan,
+      toPlan: row.to_plan,
+      fromPlanExpiresAt: row.from_plan_expires_at,
+      toPlanExpiresAt: row.to_plan_expires_at,
+      createdAt: row.created_at,
+    }));
+
+  return NextResponse.json({ changes });
 }
 
 export async function POST(request: Request) {
