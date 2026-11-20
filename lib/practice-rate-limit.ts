@@ -18,7 +18,14 @@ import { getRequestUser } from "./supabase/server";
  * routes keep working before the migration is applied.
  */
 
-export type PracticeRateAction = "generate" | "check" | "check-unverified";
+export type PracticeRateAction =
+  | "generate"
+  | "check"
+  | "check-unverified"
+  // Free photo "read" step (transcribe only, no daily solve used).
+  | "scan-read"
+  // "Report wrong answer" submissions.
+  | "feedback";
 
 type Window = { bucket: string; seconds: number; limit: number };
 
@@ -42,6 +49,15 @@ const USER_LIMITS: Record<PracticeRateAction, Window[]> = {
     { bucket: "checku:burst", seconds: MINUTE, limit: 15 },
     { bucket: "checku:day", seconds: DAY, limit: 200 },
   ],
+  "scan-read": [
+    { bucket: "scan:burst", seconds: MINUTE, limit: 10 },
+    { bucket: "scan:hour", seconds: HOUR, limit: 60 },
+    { bucket: "scan:day", seconds: DAY, limit: 150 },
+  ],
+  feedback: [
+    { bucket: "feedback:burst", seconds: MINUTE, limit: 6 },
+    { bucket: "feedback:day", seconds: DAY, limit: 60 },
+  ],
 };
 
 // Per guest (signed cookie). Slightly lower than signed-in users.
@@ -60,6 +76,15 @@ const GUEST_LIMITS: Record<PracticeRateAction, Window[]> = {
     { bucket: "checku:burst", seconds: MINUTE, limit: 10 },
     { bucket: "checku:day", seconds: DAY, limit: 100 },
   ],
+  "scan-read": [
+    { bucket: "scan:burst", seconds: MINUTE, limit: 6 },
+    { bucket: "scan:hour", seconds: HOUR, limit: 30 },
+    { bucket: "scan:day", seconds: DAY, limit: 60 },
+  ],
+  feedback: [
+    { bucket: "feedback:burst", seconds: MINUTE, limit: 4 },
+    { bucket: "feedback:day", seconds: DAY, limit: 30 },
+  ],
 };
 
 // Per hashed IP for guests (cookie clearing / scripts). Generous because a
@@ -77,10 +102,22 @@ const GUEST_IP_LIMITS: Record<PracticeRateAction, Window[]> = {
     { bucket: "ip:checku:burst", seconds: MINUTE, limit: 30 },
     { bucket: "ip:checku:day", seconds: DAY, limit: 400 },
   ],
+  "scan-read": [
+    { bucket: "ip:scan:burst", seconds: MINUTE, limit: 20 },
+    { bucket: "ip:scan:day", seconds: DAY, limit: 300 },
+  ],
+  feedback: [
+    { bucket: "ip:feedback:burst", seconds: MINUTE, limit: 15 },
+    { bucket: "ip:feedback:day", seconds: DAY, limit: 200 },
+  ],
 };
 
 export const PRACTICE_RATE_LIMIT_MESSAGE =
   "You're practising really fast! Take a short break and try again in a little while.";
+export const SCAN_RATE_LIMIT_MESSAGE =
+  "You're scanning really fast! Take a short break and try again in a little while.";
+export const FEEDBACK_RATE_LIMIT_MESSAGE =
+  "Thanks! We've received a lot of reports from you already. Please try again later.";
 export const PRACTICE_DAILY_CAP_MESSAGE =
   "You've done a huge amount of practice today. Great work! Practice will be available again tomorrow.";
 
@@ -213,10 +250,23 @@ export async function enforcePracticeRateLimit(
     {
       if (!result.allowed) {
         const isDaily = window.seconds >= DAY;
+        const error =
+          action === "scan-read"
+            ? SCAN_RATE_LIMIT_MESSAGE
+            : action === "feedback"
+              ? FEEDBACK_RATE_LIMIT_MESSAGE
+              : isDaily
+                ? PRACTICE_DAILY_CAP_MESSAGE
+                : PRACTICE_RATE_LIMIT_MESSAGE;
         const response = NextResponse.json(
           {
-            error: isDaily ? PRACTICE_DAILY_CAP_MESSAGE : PRACTICE_RATE_LIMIT_MESSAGE,
-            code: "PRACTICE_RATE_LIMITED",
+            error,
+            code:
+              action === "scan-read"
+                ? "SCAN_RATE_LIMITED"
+                : action === "feedback"
+                  ? "FEEDBACK_RATE_LIMITED"
+                  : "PRACTICE_RATE_LIMITED",
             retryAfterSeconds: result.retryAfterSeconds,
           },
           {

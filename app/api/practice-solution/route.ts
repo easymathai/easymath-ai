@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { parseStudentLevel, solveTextQuestion } from "@/lib/text-solver";
+import {
+  parseMathFormat,
+  parseStudentLevel,
+  solveTextQuestion,
+} from "@/lib/text-solver";
 import { verifyPracticeToken } from "@/lib/practice-token";
 
 /**
@@ -27,7 +31,9 @@ export async function POST(request: Request) {
     }
 
     try {
-      const solution = await solveTextQuestion(question, level);
+      const solution = await solveTextQuestion(question, level, {
+        mathFormat: parseMathFormat(body.mathFormat),
+      });
 
       if (!solution.trim()) {
         return NextResponse.json(

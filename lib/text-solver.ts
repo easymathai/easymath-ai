@@ -19,6 +19,41 @@ const STUDENT_LEVELS = ["primary", "middle", "high", "advanced"] as const;
 
 export type StudentLevel = (typeof STUDENT_LEVELS)[number];
 
+/**
+ * Output format for math inside a solution.
+ * - "plain": original plain-text output (default; older mobile builds expect it).
+ * - "latex": math wrapped in $...$ / $$...$$ so new web/mobile clients can
+ *   render real fractions, powers, and roots with KaTeX.
+ * Clients opt in by sending mathFormat: "latex".
+ */
+export type MathFormat = "plain" | "latex";
+
+export function parseMathFormat(value: unknown): MathFormat {
+  return value === "latex" ? "latex" : "plain";
+}
+
+export const LATEX_FORMAT_INSTRUCTIONS = `
+Math formatting (important):
+- Write every mathematical expression, equation, fraction, power, root, and symbol in LaTeX.
+- Wrap inline math in single dollar signs, for example: $\\frac{3}{4} + \\frac{1}{2} = \\frac{5}{4}$ or $x^2 + 5x + 6$.
+- Put a key equation on its own line wrapped in double dollar signs when it helps, for example: $$2x + 5 = 15$$
+- Use \\frac{a}{b} for fractions, x^{2} for powers, \\sqrt{x} for roots, \\times for multiplication, \\div for division, \\pi for pi, ^\\circ for degrees.
+- Never use \\( \\) or \\[ \\] delimiters. Only $...$ and $$...$$.
+- Keep the section heading lines (FINAL ANSWER, STEP-BY-STEP EXPLANATION, WHY IT WORKS, COMMON MISTAKE, PRACTICE QUESTION) as plain text with no dollar signs.
+- For money, write the word (for example "5 dollars" or "AED 5") instead of a bare dollar sign.
+- Keep normal words outside the dollar signs. Do not wrap whole sentences in math.
+`;
+
+export function getMathFormatInstructions(format: MathFormat): string {
+  return format === "latex" ? LATEX_FORMAT_INSTRUCTIONS : "";
+}
+
+export type SolveTextOptions = {
+  mathFormat?: MathFormat;
+  /** "photo" when the question was read from a photo and confirmed by the student. */
+  source?: "text" | "photo";
+};
+
 export function parseStudentLevel(value: unknown): StudentLevel {
   if (typeof value === "string" && STUDENT_LEVELS.includes(value as StudentLevel)) {
     return value as StudentLevel;
@@ -233,7 +268,8 @@ function parseCheckerOutput(
 async function checkSolution(
   question: string,
   originalSolution: string,
-  level: StudentLevel
+  level: StudentLevel,
+  mathFormat: MathFormat
 ): Promise<string> {
   try {
     const checkerResponse = await openai.responses.create(
@@ -243,6 +279,7 @@ async function checkSolution(
 ${getLevelStyleInstructions(level)}
 If you must output a corrected solution after ERROR, write that correction at this student level. Do not rewrite a mathematically correct solution.
 The PRACTICE QUESTION in a correction must test the same concept with different numbers, must not repeat the original question, and must not include the answer.
+${mathFormat === "latex" ? `The draft uses LaTeX math in $...$ and $$...$$. LaTeX formatting is not a math error. Any correction must use the same LaTeX style.\n${LATEX_FORMAT_INSTRUCTIONS}` : ""}
 `,
         input: `Student question:\n${question}\n\nDraft EasyMath solution to check:\n${originalSolution}`,
       },
@@ -269,14 +306,24 @@ The PRACTICE QUESTION in a correction must test the same concept with different 
   }
 }
 
+const photoSourceInstructions = `
+This question was read from the student's photo and then checked (and possibly corrected) by the student.
+Solve exactly the confirmed text below. Do not change numbers, variables, or operators.
+Start STEP-BY-STEP EXPLANATION with a first line in this style: 1. Read from photo: <the confirmed problem>
+`;
+
 export async function solveTextQuestion(
   question: string,
-  level: StudentLevel
+  level: StudentLevel,
+  options: SolveTextOptions = {}
 ): Promise<string> {
+  const mathFormat = options.mathFormat ?? "plain";
   const response = await openai.responses.create({
     model: "gpt-5-mini",
     instructions: `${teacherInstructions}
 ${getLevelStyleInstructions(level)}
+${options.source === "photo" ? photoSourceInstructions : ""}
+${getMathFormatInstructions(mathFormat)}
 `,
     input: question,
   });
@@ -288,5 +335,5 @@ ${getLevelStyleInstructions(level)}
     return "";
   }
 
-  return checkSolution(question, originalSolution, level);
+  return checkSolution(question, originalSolution, level, mathFormat);
 }

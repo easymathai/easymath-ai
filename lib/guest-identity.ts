@@ -2,6 +2,14 @@ import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
 
 export const GUEST_ID_COOKIE = "ema_guest_id";
+/**
+ * Native apps (Android/iOS) can't rely on HTTP-only cookies, so they send the
+ * same signed guest token in this request header and receive a freshly minted
+ * token in GUEST_TOKEN_RESPONSE_HEADER. The token is the exact signed value the
+ * web cookie carries, so guest limits (10 a day) are shared logic.
+ */
+export const GUEST_TOKEN_REQUEST_HEADER = "x-easymath-guest";
+export const GUEST_TOKEN_RESPONSE_HEADER = "x-easymath-guest-token";
 export const GUEST_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 180;
 
 export const GUEST_USAGE_CONFIG_MESSAGE =
@@ -204,7 +212,10 @@ export function resolveGuestIdentity(request: Request): GuestIdentity | null {
   }
 
   const hashedIpId = ipGuestId(request, secret);
-  const rawCookie = readCookieValue(request, GUEST_ID_COOKIE);
+  const rawCookie =
+    readCookieValue(request, GUEST_ID_COOKIE) ||
+    request.headers.get(GUEST_TOKEN_REQUEST_HEADER)?.trim() ||
+    null;
 
   if (rawCookie) {
     const guestId = verifySignedGuestCookie(rawCookie, secret);
@@ -242,6 +253,8 @@ export function applyGuestIdentityCookie(
     secure: process.env.NODE_ENV === "production",
     maxAge: GUEST_COOKIE_MAX_AGE_SECONDS,
   });
+  // Native clients read the token from this header and store it securely.
+  response.headers.set(GUEST_TOKEN_RESPONSE_HEADER, signedValue);
 }
 
 export function attachGuestCookie(

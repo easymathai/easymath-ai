@@ -49,6 +49,8 @@ import {
 } from "@/lib/progress";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import SiteFooter from "./site-footer";
+import MathText from "./math-text";
+import { mathToPlainText } from "@/lib/math-format";
 import BrandLogo from "./brand-logo";
 import {
   canUseLocalSolver,
@@ -306,6 +308,16 @@ export default function Home() {
     emptyDashboardStats
   );
   const [detectedProblem, setDetectedProblem] = useState("");
+  // Photo scan: the free "read" step result the student can confirm or edit
+  // before spending a daily solve. null = nothing read yet.
+  const [scanDraft, setScanDraft] = useState<string | null>(null);
+  const [lastSolveSource, setLastSolveSource] = useState<"text" | "photo">("text");
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState("wrong_answer");
+  const [reportComment, setReportComment] = useState("");
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportStatus, setReportStatus] = useState<"" | "sent" | "error">("");
+  const [reportMessage, setReportMessage] = useState("");
   const [stats, setStats] = useState<StudentStats>(emptyStats);
   const [hasMounted, setHasMounted] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -1260,8 +1272,12 @@ export default function Home() {
     return true;
   }
 
-  async function solveQuestion(customQuestion?: string) {
+  async function solveQuestion(
+    customQuestion?: string,
+    options: { source?: "text" | "photo" } = {}
+  ) {
     const finalQuestion = customQuestion ?? question;
+    const solveSource = options.source ?? "text";
 
     if (!finalQuestion.trim()) {
       setMessage("Please enter a math question.");
@@ -1283,7 +1299,9 @@ export default function Home() {
     setSolverPracticeToken("");
     setSolverPracticeQuestion("");
     setMessage("");
-    setDetectedProblem("");
+    setDetectedProblem(solveSource === "photo" ? finalQuestion : "");
+    setLastSolveSource(solveSource);
+    resetReport();
 
     try {
       const headers = await authHeaders({
@@ -1296,6 +1314,8 @@ export default function Home() {
         body: JSON.stringify({
           question: finalQuestion,
           level: studentLevel,
+          mathFormat: "latex",
+          source: solveSource,
         }),
       });
 
@@ -1344,17 +1364,27 @@ export default function Home() {
       );
       setSolution(result);
 
-      recordActivity(`Solved: ${finalQuestion}`, {
-        questionsSolvedDelta: 1,
-      });
+      if (solveSource === "photo") {
+        setScanDraft(null);
+      }
+
+      recordActivity(
+        solveSource === "photo"
+          ? "Solved a photo problem"
+          : `Solved: ${mathToPlainText(finalQuestion)}`,
+        {
+          questionsSolvedDelta: 1,
+        }
+      );
       touchDashboardStreak();
 
       const updatedHistory = [
         {
-          question: finalQuestion,
+          question:
+            solveSource === "photo" ? `📷 ${finalQuestion}` : finalQuestion,
           solution: result,
           at: new Date().toISOString(),
-          source: "text" as const,
+          source: solveSource,
         },
         ...history.filter(
           (item) => item.question !== finalQuestion
@@ -1412,12 +1442,18 @@ export default function Home() {
     setSolution("");
     setMessage("");
     setDetectedProblem("");
+    setScanDraft(null);
 
     const preview = URL.createObjectURL(file);
     setImagePreview(preview);
   }
 
-  async function solveImage() {
+  /**
+   * Step 1 of the photo solver: read the problem from the photo (free — never
+   * uses a daily solve). The student then confirms or fixes the text, and
+   * step 2 (solveQuestion with source "photo") spends one solve.
+   */
+  async function readImage() {
     if (!imageFile) {
       setMessage("Please choose a photo first.");
       return;
@@ -1438,12 +1474,13 @@ export default function Home() {
     setSolverPracticeQuestion("");
     setMessage("");
     setDetectedProblem("");
-    setQuestion("Math problem from uploaded photo");
+    setScanDraft(null);
 
     try {
       const formData = new FormData();
       formData.append("image", imageFile);
       formData.append("level", studentLevel);
+      formData.append("mode", "read");
 
       const headers = await authHeaders();
 
@@ -1455,14 +1492,14 @@ export default function Home() {
 
       if (response.status === 413) {
         // The hosting platform may reject large bodies with a non-JSON page.
-        setSolution(IMAGE_TOO_LARGE_MESSAGE);
+        setMessage(IMAGE_TOO_LARGE_MESSAGE);
         return;
       }
 
       const data = await response.json();
 
       if (!response.ok) {
-        if (response.status === 429) {
+        if (response.status === 429 && data.code === "DAILY_LIMIT_REACHED") {
           setMessage(
             studentFriendlyError(data.error, DAILY_LIMIT_MESSAGE)
           );
@@ -1471,76 +1508,110 @@ export default function Home() {
           } else {
             setDailyUsed(dailyLimit);
           }
-          setSolution("");
           return;
         }
 
-        setSolution(
-          studentFriendlyError(
-            data.error,
-            "We couldn't read that photo. Please try a clearer picture."
-          )
+        setMessage(
+          response.status === 422
+            ? "We couldn't read the math in this photo. Try a clearer, closer picture — this didn't use a solve."
+            : studentFriendlyError(
+                data.error,
+                "We couldn't read that photo. Please try a clearer picture. This didn't use a solve."
+              )
         );
         return;
       }
 
-      if (signedIn || cloudEnabled) {
-        applyUsageFromResponse(data);
-      } else {
-        const consumed = consumeLocalSolver();
-        setDailyUsed(consumed.used);
-        setDailyLimit(consumed.limit);
+      const read =
+        typeof data.transcription === "string" ? data.transcription.trim() : "";
+
+      if (!read) {
+        setMessage(
+          "We couldn't read the math in this photo. Try a clearer, closer picture — this didn't use a solve."
+        );
+        return;
       }
 
-      const result =
-        data.solution || "No solution returned.";
-
-      setSolverPracticeToken(
-        typeof data.practiceToken === "string" ? data.practiceToken.trim() : ""
-      );
-      setSolverPracticeQuestion(
-        typeof data.practiceQuestion === "string"
-          ? data.practiceQuestion.trim()
-          : ""
-      );
-      setSolution(result);
-
-      const fromApi =
-        typeof data.transcription === "string"
-          ? data.transcription.trim()
-          : "";
-
-      setDetectedProblem(
-        fromApi ||
-          getSourceMathQuestion(
-            "Math problem from uploaded photo",
-            result
-          )
-      );
-
-      recordActivity("Solved a photo problem", {
-        questionsSolvedDelta: 1,
-      });
-      touchDashboardStreak();
-
-      const updatedHistory = [
-        {
-          question: "📷 Math problem from photo",
-          solution: result,
-          at: new Date().toISOString(),
-          source: "photo" as const,
-        },
-        ...history,
-      ].slice(0, SOLVER_HISTORY_LIMIT);
-
-      saveHistory(updatedHistory);
+      setScanDraft(read);
     } catch {
-      setSolution(
+      setMessage(
         "We couldn't reach the photo solver. Please check your connection and try again."
       );
     } finally {
       solverBusyRef.current = false;
       setImageLoading(false);
+    }
+  }
+
+  async function solveConfirmedScan() {
+    const confirmed = (scanDraft ?? "").trim();
+
+    if (!confirmed) {
+      setMessage("Please type the math problem from your photo.");
+      return;
+    }
+
+    await solveQuestion(confirmed, { source: "photo" });
+  }
+
+  function resetReport() {
+    setReportOpen(false);
+    setReportReason("wrong_answer");
+    setReportComment("");
+    setReportBusy(false);
+    setReportStatus("");
+    setReportMessage("");
+  }
+
+  async function submitReport() {
+    if (reportBusy || !solution.trim()) {
+      return;
+    }
+
+    setReportBusy(true);
+    setReportStatus("");
+    setReportMessage("");
+
+    try {
+      const headers = await authHeaders({
+        "Content-Type": "application/json",
+      });
+
+      const response = await fetch("/api/feedback", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          question: (detectedProblem || question || "").slice(0, 2000),
+          solution: solution.slice(0, 20000),
+          reason: reportReason,
+          comment: reportComment.trim().slice(0, 1000),
+          source: lastSolveSource,
+          level: studentLevel,
+          platform: "web",
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setReportStatus("error");
+        setReportMessage(
+          studentFriendlyError(
+            data.error,
+            "We couldn't send that report. Please try again."
+          )
+        );
+        return;
+      }
+
+      setReportStatus("sent");
+      setReportMessage("Thanks! Our team will check this solution.");
+      setReportOpen(false);
+    } catch {
+      setReportStatus("error");
+      setReportMessage("We couldn't send that report. Please try again.");
+    } finally {
+      setReportBusy(false);
     }
   }
 
@@ -1900,6 +1971,7 @@ export default function Home() {
           question: practiceQuestion,
           level: studentLevel,
           practiceToken,
+          mathFormat: "latex",
         }),
       });
 
@@ -2389,6 +2461,7 @@ export default function Home() {
     setImageFile(null);
     setImagePreview("");
     setDetectedProblem("");
+    setScanDraft(null);
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -2399,6 +2472,7 @@ export default function Home() {
     setQuestion("");
     setSolution("");
     setMessage("");
+    resetReport();
     removeImage();
   }
 
@@ -3376,9 +3450,10 @@ export default function Home() {
                       marginTop: "14px",
                     }}
                   >
+                    {scanDraft === null && (
                     <button
                       type="button"
-                      onClick={solveImage}
+                      onClick={readImage}
                       disabled={
                         imageLoading || loading || solverLimitReached
                       }
@@ -3417,9 +3492,10 @@ export default function Home() {
                       ) : solverLimitReached ? (
                         "Daily limit reached"
                       ) : (
-                        "✨ Solve Photo"
+                        "🔍 Read Photo"
                       )}
                     </button>
+                    )}
 
                     <button
                       type="button"
@@ -3444,6 +3520,119 @@ export default function Home() {
                       Remove
                     </button>
                   </div>
+
+                  {scanDraft === null && !imageLoading && (
+                    <div
+                      style={{
+                        marginTop: "10px",
+                        color: theme.muted,
+                        fontSize: "13px",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Reading the photo is free. You can check and fix it before it uses a solve.
+                    </div>
+                  )}
+
+                  {scanDraft !== null && (
+                    <div
+                      style={{
+                        marginTop: "16px",
+                        padding: "16px 18px",
+                        borderRadius: "16px",
+                        border: "1px solid #22c55e",
+                        background: darkMode ? "#052e16" : "#f0fdf4",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontWeight: 900,
+                          fontSize: "12px",
+                          letterSpacing: "0.06em",
+                          color: darkMode ? "#86efac" : "#15803d",
+                        }}
+                      >
+                        ✅ WE READ THIS FROM YOUR PHOTO
+                      </div>
+                      <div
+                        style={{
+                          marginTop: "6px",
+                          color: theme.muted,
+                          fontSize: "13px",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Check it matches your question. Fix anything that&apos;s wrong, then solve.
+                      </div>
+                      <textarea
+                        value={scanDraft}
+                        aria-label="Problem read from your photo"
+                        onChange={(event) => setScanDraft(event.target.value)}
+                        rows={Math.min(6, Math.max(2, scanDraft.split("\n").length + 1))}
+                        disabled={loading}
+                        style={{
+                          width: "100%",
+                          marginTop: "12px",
+                          padding: "12px 14px",
+                          borderRadius: "12px",
+                          border: `1px solid ${theme.border}`,
+                          background: theme.input,
+                          color: theme.text,
+                          fontSize: "18px",
+                          fontWeight: 700,
+                          fontFamily: "inherit",
+                          resize: "vertical",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "10px",
+                          flexWrap: "wrap",
+                          marginTop: "12px",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => void solveConfirmedScan()}
+                          disabled={loading || imageLoading || solverLimitReached || !scanDraft.trim()}
+                          style={{
+                            border: "none",
+                            background: solverLimitReached
+                              ? "#86efac"
+                              : "linear-gradient(135deg,#16a34a,#15803d)",
+                            color: "white",
+                            padding: "13px 18px",
+                            borderRadius: "12px",
+                            fontWeight: 900,
+                            cursor: solverLimitReached ? "not-allowed" : "pointer",
+                            boxShadow: solverLimitReached
+                              ? "none"
+                              : "0 8px 18px rgba(22,163,74,0.28)",
+                          }}
+                        >
+                          {loading ? "Solving..." : solverLimitReached ? "Daily limit reached" : "✨ Solve This"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void readImage()}
+                          disabled={loading || imageLoading}
+                          style={{
+                            border: `1px solid ${theme.border}`,
+                            background: theme.buttonSoft,
+                            color: theme.text,
+                            padding: "13px 18px",
+                            borderRadius: "12px",
+                            fontWeight: 800,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Read Again
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -3603,7 +3792,7 @@ export default function Home() {
                           lineHeight: 1.4,
                         }}
                       >
-                        {detectedProblem || question}
+                        <MathText text={detectedProblem || question} block={false} />
                       </div>
 
                       {detectedProblem && (
@@ -3615,7 +3804,7 @@ export default function Home() {
                             fontWeight: 700,
                           }}
                         >
-                          Detected problem from your photo
+                          From your photo (checked by you)
                         </div>
                       )}
                     </div>
@@ -3624,7 +3813,7 @@ export default function Home() {
                       type="button"
                       onClick={() =>
                         navigator.clipboard.writeText(
-                          solution
+                          mathToPlainText(solution)
                         )
                       }
                       style={{
@@ -3684,11 +3873,7 @@ export default function Home() {
                           lineHeight: 1.25,
                         }}
                       >
-                        {
-                          parts[
-                            "FINAL ANSWER"
-                          ]
-                        }
+                        <MathText text={parts["FINAL ANSWER"]} />
                       </div>
                     </div>
                   )}
@@ -3714,7 +3899,8 @@ export default function Home() {
                         📘 STEP-BY-STEP
                       </strong>
 
-                      <div
+                      <MathText
+                        text={parts["STEP-BY-STEP EXPLANATION"]}
                         style={{
                           whiteSpace:
                             "pre-wrap",
@@ -3723,13 +3909,7 @@ export default function Home() {
 
                           lineHeight: 1.85,
                         }}
-                      >
-                        {
-                          parts[
-                            "STEP-BY-STEP EXPLANATION"
-                          ]
-                        }
-                      </div>
+                      />
                     </div>
                   )}
 
@@ -3752,7 +3932,8 @@ export default function Home() {
                         💡 WHY IT WORKS
                       </strong>
 
-                      <div
+                      <MathText
+                        text={parts["WHY IT WORKS"]}
                         style={{
                           whiteSpace:
                             "pre-wrap",
@@ -3761,13 +3942,7 @@ export default function Home() {
 
                           lineHeight: 1.7,
                         }}
-                      >
-                        {
-                          parts[
-                            "WHY IT WORKS"
-                          ]
-                        }
-                      </div>
+                      />
                     </div>
                   )}
 
@@ -3792,7 +3967,8 @@ export default function Home() {
                         ⚠️ COMMON MISTAKE
                       </strong>
 
-                      <div
+                      <MathText
+                        text={parts["COMMON MISTAKE"]}
                         style={{
                           whiteSpace:
                             "pre-wrap",
@@ -3801,13 +3977,7 @@ export default function Home() {
 
                           lineHeight: 1.7,
                         }}
-                      >
-                        {
-                          parts[
-                            "COMMON MISTAKE"
-                          ]
-                        }
-                      </div>
+                      />
                     </div>
                   )}
 
@@ -3829,9 +3999,152 @@ export default function Home() {
                           boxShadow: theme.shadowSoft,
                         }}
                       >
-                        {solution}
+                        <MathText text={solution} />
                       </div>
                     )}
+
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    {reportStatus === "sent" ? (
+                      <span
+                        role="status"
+                        style={{
+                          color: darkMode ? "#86efac" : "#15803d",
+                          fontWeight: 800,
+                          fontSize: "14px",
+                        }}
+                      >
+                        ✅ {reportMessage}
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setReportOpen((open) => !open)}
+                        aria-expanded={reportOpen}
+                        style={{
+                          border: `1px solid ${theme.border}`,
+                          background: "transparent",
+                          color: theme.muted,
+                          borderRadius: "999px",
+                          padding: "8px 14px",
+                          fontWeight: 800,
+                          fontSize: "13px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        🚩 Report wrong answer
+                      </button>
+                    )}
+                  </div>
+
+                  {reportOpen && reportStatus !== "sent" && (
+                    <div
+                      style={{
+                        padding: "16px 18px",
+                        borderRadius: "16px",
+                        border: `1px solid ${theme.border}`,
+                        background: theme.buttonSoft,
+                        display: "grid",
+                        gap: "10px",
+                      }}
+                    >
+                      <strong>What looks wrong?</strong>
+                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                        {(
+                          [
+                            ["wrong_answer", "Wrong answer"],
+                            ["wrong_steps", "Wrong steps"],
+                            ...(lastSolveSource === "photo"
+                              ? ([["misread_photo", "Misread my photo"]] as const)
+                              : []),
+                            ["unclear", "Hard to understand"],
+                            ["other", "Something else"],
+                          ] as const
+                        ).map(([id, label]) => (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => setReportReason(id)}
+                            aria-pressed={reportReason === id}
+                            style={{
+                              border: `1px solid ${reportReason === id ? "#7c3aed" : theme.border}`,
+                              background: reportReason === id ? "#7c3aed" : "transparent",
+                              color: reportReason === id ? "white" : theme.text,
+                              borderRadius: "999px",
+                              padding: "8px 12px",
+                              fontWeight: 700,
+                              fontSize: "13px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <textarea
+                        value={reportComment}
+                        onChange={(event) => setReportComment(event.target.value.slice(0, 1000))}
+                        placeholder="Optional: what should the answer be?"
+                        aria-label="Optional report details"
+                        rows={2}
+                        style={{
+                          width: "100%",
+                          padding: "10px 12px",
+                          borderRadius: "12px",
+                          border: `1px solid ${theme.border}`,
+                          background: "transparent",
+                          color: theme.text,
+                          fontFamily: "inherit",
+                          fontSize: "14px",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                      {reportStatus === "error" && (
+                        <div role="status" style={{ color: "#f87171", fontWeight: 700, fontSize: "13px" }}>
+                          {reportMessage}
+                        </div>
+                      )}
+                      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          onClick={() => void submitReport()}
+                          disabled={reportBusy}
+                          style={{
+                            border: "none",
+                            background: "linear-gradient(135deg,#7c3aed,#2563eb)",
+                            color: "white",
+                            padding: "10px 16px",
+                            borderRadius: "12px",
+                            fontWeight: 900,
+                            cursor: reportBusy ? "wait" : "pointer",
+                          }}
+                        >
+                          {reportBusy ? "Sending..." : "Send report"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setReportOpen(false)}
+                          style={{
+                            border: `1px solid ${theme.border}`,
+                            background: "transparent",
+                            color: theme.text,
+                            padding: "10px 16px",
+                            borderRadius: "12px",
+                            fontWeight: 800,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -4112,7 +4425,7 @@ export default function Home() {
                               marginTop: "12px",
                             }}
                           >
-                            {practiceQuestion}
+                            <MathText text={practiceQuestion} block={false} />
                           </div>
 
                           <input
@@ -4279,7 +4592,7 @@ export default function Home() {
                                 whiteSpace: "pre-wrap",
                               }}
                             >
-                              {practiceRevealedSolution}
+                              <MathText text={practiceRevealedSolution} />
                             </div>
                           )}
 
@@ -4447,7 +4760,7 @@ export default function Home() {
                         marginTop: "8px",
                       }}
                     >
-                      {currentReviewMistake.question}
+                      <MathText text={currentReviewMistake.question} block={false} />
                     </div>
                     <div
                       style={{
@@ -5179,7 +5492,7 @@ export default function Home() {
                       cursor: "pointer",
                     }}
                   >
-                    {item.question}
+                    {mathToPlainText(item.question)}
                   </button>
                 )
               )}

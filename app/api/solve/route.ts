@@ -5,7 +5,11 @@ import {
   releaseSolverReservation,
   type SolverGateSuccess,
 } from "@/lib/solver-gate";
-import { parseStudentLevel, solveTextQuestion } from "@/lib/text-solver";
+import {
+  parseMathFormat,
+  parseStudentLevel,
+  solveTextQuestion,
+} from "@/lib/text-solver";
 import {
   extractPracticeQuestion,
   jsonWithPracticeCookie,
@@ -18,10 +22,21 @@ export async function POST(request: Request) {
     const body = await request.json();
     const question = body.question;
     const level = parseStudentLevel(body.level);
+    // New clients opt in to LaTeX math; older clients keep plain text.
+    const mathFormat = parseMathFormat(body.mathFormat);
+    // "photo" = text the student confirmed/edited after the free photo read step.
+    const source = body.source === "photo" ? "photo" : "text";
 
-    if (!question || typeof question !== "string") {
+    if (!question || typeof question !== "string" || !question.trim()) {
       return NextResponse.json(
         { error: "Please enter a math question." },
+        { status: 400 }
+      );
+    }
+
+    if (question.length > 2000) {
+      return NextResponse.json(
+        { error: "That question is too long. Please shorten it and try again." },
         { status: 400 }
       );
     }
@@ -38,7 +53,7 @@ export async function POST(request: Request) {
     let solution = "";
 
     try {
-      solution = await solveTextQuestion(question, level);
+      solution = await solveTextQuestion(question, level, { mathFormat, source });
 
       if (!solution.trim()) {
         await releaseSolverReservation(gate);
@@ -91,6 +106,7 @@ export async function POST(request: Request) {
       jsonWithPracticeCookie(
         {
           solution,
+          mathFormat,
           usage: gate.usage ?? null,
           practiceQuestion: practiceQuestion || null,
           practiceToken,

@@ -40,3 +40,21 @@ body {
     height: 32px;
   }
 }
+
+/* KaTeX math inside solutions (MathText). */
+.easymath-math .katex {
+  font-size: 1.12em;
+}
+.easymath-math-display {
+  display: block;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 6px 0;
+  max-width: 100%;
+}
+.easymath-math-display .katex-display {
+  margin: 0.2em 0;
+}
+.easymath-math-inline .katex {
+  white-space: nowrap;
+}

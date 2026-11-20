@@ -12,6 +12,11 @@ import {
   signPracticeQuestions,
 } from "@/lib/practice-token";
 import { attachGuestCookie } from "@/lib/guest-identity";
+import { enforcePracticeRateLimit } from "@/lib/practice-rate-limit";
+import {
+  getMathFormatInstructions,
+  parseMathFormat,
+} from "@/lib/text-solver";
 import {
   IMAGE_TOO_LARGE_MESSAGE,
   MAX_IMAGE_UPLOAD_BYTES,
@@ -360,6 +365,31 @@ function extractTranscription(text: string): string {
   return lines[0] ?? "";
 }
 
+async function transcribeImage(imageDataUrl: string): Promise<string> {
+  const transcriptionResponse = await openai.responses.create({
+    model: "gpt-5-mini",
+    instructions: transcribeInstructions,
+    input: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: "Transcribe the handwritten or printed math in this photo. Read symbol by symbol. If you see a number touching a handwritten x, write them as one term such as 4x, not 4 + 2x. Return only the math.",
+          },
+          {
+            type: "input_image",
+            image_url: imageDataUrl,
+            detail: "high",
+          },
+        ],
+      },
+    ],
+  });
+
+  return extractTranscription(getOutputText(transcriptionResponse));
+}
+
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
@@ -388,6 +418,11 @@ export async function POST(request: Request) {
 
     const imagePart = asBinaryUploadPart(formData.get("image"));
     const level = parseStudentLevel(formData.get("level"));
+    // mode=read: transcribe only so the student can confirm/edit the problem
+    // before solving. The read is free: it never uses a daily solve.
+    // Without mode (older clients), read + solve in one call as before.
+    const mode = formData.get("mode") === "read" ? "read" : "solve";
+    const mathFormat = parseMathFormat(formData.get("mathFormat"));
     // Extra form fields (usageMode, plan, unlimited, etc.) are ignored.
 
     if (!imagePart) {
@@ -448,6 +483,56 @@ export async function POST(request: Request) {
       );
     }
 
+    if (mode === "read") {
+      const limited = await enforcePracticeRateLimit(request, "scan-read");
+
+      if (!limited.ok) {
+        return limited.response;
+      }
+
+      // Reserve a credit only to confirm the student still has solves left
+      // today, then always release it: reading the photo is free.
+      const readEnforced = await enforceLoggedInSolverLimit(request);
+
+      if (!readEnforced.ok) {
+        return readEnforced.response;
+      }
+
+      const readGate: SolverGateSuccess = readEnforced;
+      let readText = "";
+
+      try {
+        const imageDataUrl = `data:${prepared.mimeType};base64,${prepared.imageBuffer.toString("base64")}`;
+        readText = await transcribeImage(imageDataUrl);
+      } catch (error) {
+        console.error("solve-image read error:", error);
+      } finally {
+        await releaseSolverReservation(readGate);
+      }
+
+      if (!readText.trim()) {
+        return attachGuestCookie(
+          NextResponse.json(
+            {
+              error: "Unable to read the math in this photo.",
+              code: "UNREADABLE_PHOTO",
+            },
+            { status: 422 }
+          ),
+          readGate.guestCookieToSet
+        );
+      }
+
+      return attachGuestCookie(
+        NextResponse.json({
+          mode: "read",
+          transcription: readText.trim(),
+          solveUsed: false,
+        }),
+        readGate.guestCookieToSet
+      );
+    }
+
     const enforced = await enforceLoggedInSolverLimit(request);
 
     if (!enforced.ok) {
@@ -461,30 +546,7 @@ export async function POST(request: Request) {
     try {
       const imageDataUrl = `data:${prepared.mimeType};base64,${prepared.imageBuffer.toString("base64")}`;
 
-      const transcriptionResponse = await openai.responses.create({
-        model: "gpt-5-mini",
-        instructions: transcribeInstructions,
-        input: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "input_text",
-                text: "Transcribe the handwritten or printed math in this photo. Read symbol by symbol. If you see a number touching a handwritten x, write them as one term such as 4x, not 4 + 2x. Return only the math.",
-              },
-              {
-                type: "input_image",
-                image_url: imageDataUrl,
-                detail: "high",
-              },
-            ],
-          },
-        ],
-      });
-
-      transcription = extractTranscription(
-        getOutputText(transcriptionResponse)
-      );
+      transcription = await transcribeImage(imageDataUrl);
 
       if (!transcription) {
         await releaseSolverReservation(gate);
@@ -501,6 +563,7 @@ export async function POST(request: Request) {
         model: "gpt-5-mini",
         instructions: `${teacherInstructions}
 ${getLevelStyleInstructions(level)}
+${getMathFormatInstructions(mathFormat)}
 `,
         input: `Solve this exact transcription from the photo. Do not change it.\n\n${transcription}\n\nPut the transcription only as the first step-by-step line, in the form: 1. Read from photo: ${transcription}`,
       });
@@ -557,6 +620,7 @@ ${getLevelStyleInstructions(level)}
         {
           solution,
           transcription,
+          mathFormat,
           usage: gate.usage ?? null,
           practiceQuestion: practiceQuestion || null,
           practiceToken,
