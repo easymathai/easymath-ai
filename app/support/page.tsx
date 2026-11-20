@@ -11,7 +11,7 @@ export default function SupportPage() {
   const supportEmail = getSupportEmail();
 
   return (
-    <LegalShell title="Support">
+    <LegalShell title="Support" updated="21 November 2026">
       <p>
         EasyMath AI is an educational math tutor. Use this page if you need
         help with the product.
@@ -34,9 +34,12 @@ export default function SupportPage() {
 
       <h2>Accounts</h2>
       <p>
-        If you already have an EasyMath account, open Account in the app to see
-        your email, sign out, or permanently delete your account and saved
-        cloud progress (you will be asked to type DELETE to confirm).
+        If you already have an EasyMath account, open Account on the website or
+        in the Android app to see your email, sign out, or permanently delete
+        your account and saved cloud progress (you will be asked to type DELETE
+        to confirm). If you cannot sign in, use the{" "}
+        <a href="/delete-account">Delete account</a> page or email{" "}
+        <a href={`mailto:${supportEmail}`}>{supportEmail}</a>.
       </p>
     </LegalShell>
   );

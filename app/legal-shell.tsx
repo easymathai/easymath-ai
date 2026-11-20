@@ -5,9 +5,11 @@ import SiteFooter from "./site-footer";
 export default function LegalShell({
   title,
   children,
+  updated = "10 September 2026",
 }: {
   title: string;
   children: ReactNode;
+  updated?: string;
 }) {
   return (
     <main
@@ -99,7 +101,7 @@ export default function LegalShell({
               marginBottom: "22px",
             }}
           >
-            Last updated 10 September 2026
+            Last updated {updated}
           </div>
           <div className="easymath-legal">{children}</div>
         </article>

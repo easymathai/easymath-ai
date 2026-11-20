@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 type SiteFooterProps = {
   muted?: string;
@@ -41,10 +42,32 @@ export default function SiteFooter({
         <Link href="/support" style={{ color: muted, textDecoration: "none" }}>
           Support
         </Link>
+        <span aria-hidden="true">·</span>
+        <Link href="/delete-account" style={{ color: muted, textDecoration: "none" }}>
+          Delete account
+        </Link>
       </div>
-      <div style={{ marginTop: "8px" }}>
-        © 2026 EasyMath AI
-      </div>
+      <div style={{ marginTop: "8px" }}>© 2026 EasyMath AI</div>
+      <p
+        style={{
+          margin: "12px 0 0",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+          color: muted,
+          fontSize: 13,
+          fontWeight: 600,
+        }}
+      >
+        <span>EasyMath AI by</span>
+        <Image
+          src="/branding/zayir-ai-logo-purple-dark.png"
+          alt="zayir.ai"
+          width={24}
+          height={24}
+        />
+      </p>
     </footer>
   );
 }

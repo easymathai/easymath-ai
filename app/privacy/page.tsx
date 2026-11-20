@@ -12,7 +12,7 @@ export default function PrivacyPage() {
   const supportEmail = getSupportEmail();
 
   return (
-    <LegalShell title="Privacy">
+    <LegalShell title="Privacy" updated="21 November 2026">
       <p>
         This page describes how EasyMath AI handles information, based on how
         the current app works. It is not a certification, and it does not mean
@@ -98,15 +98,15 @@ export default function PrivacyPage() {
       <h2>Your choices</h2>
       <p>
         You can use EasyMath as a guest, create an account, sign out, or stop
-        using the app. If you are signed in, open Account and use Delete
-        account. After you confirm by typing DELETE, EasyMath permanently
-        deletes your authentication account and the cloud progress tied to it
-        (profile, practice progress, solver history, activity, mistakes saved
-        for review, and signed-in daily usage). Guest progress in this browser
-        and the guest solver cookie are separate from that account delete. You
-        may also contact us at{" "}
-        <a href={`mailto:${supportEmail}`}>{supportEmail}</a> about your
-        account.
+        using the app. If you are signed in, open Account in the website or the
+        Android app and use Delete account. After you confirm by typing DELETE,
+        EasyMath permanently deletes your authentication account and the cloud
+        progress tied to it (profile, practice progress, solver history,
+        activity, mistakes saved for review, and signed-in daily usage). Guest
+        progress in this browser and the guest solver cookie are separate from
+        that account delete. You can also use the{" "}
+        <a href="/delete-account">Delete account</a> page or contact us at{" "}
+        <a href={`mailto:${supportEmail}`}>{supportEmail}</a>.
       </p>
 
       <h2>Students and younger users</h2>
