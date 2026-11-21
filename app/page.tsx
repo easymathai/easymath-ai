@@ -59,6 +59,7 @@ import Image from "next/image";
 import LandingFooter from "./landing-footer";
 import HowDemo from "./how-demo";
 import TutorSolution from "./tutor-solution";
+import SolvingLoader from "./solving-loader";
 import {
   Faq,
   Features,
@@ -3167,6 +3168,9 @@ export default function Home() {
         .em-followup { position: sticky; bottom: 14px; z-index: 5; display: flex; gap: 8px; align-items: center; margin-top: 18px; padding: 8px 8px 8px 16px; border-radius: 16px; box-shadow: 0 12px 30px rgba(15,23,42,0.16); backdrop-filter: blur(12px); }
         .em-followup input { flex: 1; min-width: 0; border: none !important; outline: none !important; background: transparent; font-size: 15px; font-weight: 600; }
         @media (max-width: 680px) { .em-tutor-notes { grid-template-columns: 1fr; } }
+        .em-skeleton { display: grid; gap: 10px; }
+        .em-skeleton span { display: block; height: 12px; border-radius: 999px; background: linear-gradient(90deg, rgba(124,58,237,0.12), rgba(37,99,235,0.22), rgba(124,58,237,0.12)); background-size: 200% 100%; animation: em-skel 1.4s ease-in-out infinite; }
+        @keyframes em-skel { from { background-position: 200% 0; } to { background-position: -200% 0; } }
         /* ---------- v2 app shell ---------- */
         .em-shell { display: grid; grid-template-columns: 252px minmax(0, 1fr); min-height: 100vh; }
         .em-shell.is-collapsed { grid-template-columns: 76px minmax(0, 1fr); }
@@ -4047,10 +4051,7 @@ export default function Home() {
                 disabled={loading || imageLoading || solverLimitReached}
               >
                 {loading ? (
-                  <>
-                    <span className="easymath-spinner" style={{ borderColor: "rgba(255,255,255,0.35)", borderTopColor: "#fff" }} />
-                    Solving…
-                  </>
+                  <SolvingLoader compact />
                 ) : solverLimitReached ? (
                   "Daily limit reached"
                 ) : (
@@ -4284,25 +4285,26 @@ export default function Home() {
               )}
             {(loading || imageLoading) && (
               <div
+                className="em-loading-card"
                 style={{
-                  marginTop: "22px",
-                  padding: "14px 16px",
-                  borderRadius: "14px",
-                  border: `1px solid ${darkMode ? "#1e3a8a" : "#bfdbfe"}`,
+                  marginTop: "18px",
+                  padding: "28px 24px",
+                  borderRadius: "20px",
+                  border: `1px solid ${darkMode ? "rgba(124,58,237,0.35)" : "#e4dbff"}`,
                   background: darkMode
-                    ? "#172554"
-                    : "#eff6ff",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
+                    ? "linear-gradient(135deg, rgba(124,58,237,0.16), rgba(37,99,235,0.12))"
+                    : "linear-gradient(135deg, #f5f3ff, #eff6ff)",
+                  display: "grid",
+                  gap: "18px",
                 }}
               >
-                <span className="easymath-spinner" aria-hidden="true" />
-                <strong>
-                  {imageLoading
-                    ? "Reading your math problem…"
-                    : "Solving your question…"}
-                </strong>
+                <SolvingLoader mode={imageLoading ? "read" : "solve"} dark={darkMode} />
+                <div className="em-skeleton" aria-hidden="true">
+                  <span style={{ width: "38%" }} />
+                  <span style={{ width: "92%" }} />
+                  <span style={{ width: "80%" }} />
+                  <span style={{ width: "64%" }} />
+                </div>
               </div>
             )}
 
@@ -4453,25 +4455,7 @@ export default function Home() {
                       >
                         ✅ {reportMessage}
                       </span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setReportOpen((open) => !open)}
-                        aria-expanded={reportOpen}
-                        style={{
-                          border: `1px solid ${theme.border}`,
-                          background: "transparent",
-                          color: theme.muted,
-                          borderRadius: "999px",
-                          padding: "8px 14px",
-                          fontWeight: 800,
-                          fontSize: "13px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        🚩 Report wrong answer
-                      </button>
-                    )}
+                    ) : null}
                   </div>
 
                   {reportOpen && reportStatus !== "sent" && (
