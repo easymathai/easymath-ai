@@ -136,12 +136,14 @@ revoke all on table public.owner_plan_audit from anon, authenticated, public;
 grant all on table public.owner_plan_audit to service_role;
 
 -- ---------------------------------------------------------------------------
--- 2) Daily solver usage (Free plan: 10 text+photo solves per UTC day)
+-- 2) Daily solver usage (Free plan: 5 solves per UTC day, incl. at most 1 photo)
+--     Photo-cap RPC details: supabase/add_free_limit_5_and_photo_cap.sql
 -- ---------------------------------------------------------------------------
 create table if not exists public.daily_usage (
   user_id uuid not null references auth.users (id) on delete cascade,
   usage_date date not null,
   solver_count integer not null default 0 check (solver_count >= 0),
+  photo_count integer not null default 0 check (photo_count >= 0),
   primary key (user_id, usage_date)
 );
 
@@ -161,6 +163,7 @@ create table if not exists public.solver_reservations (
   usage_date date not null,
   status text not null default 'pending'
     check (status in ('pending', 'released', 'committed')),
+  is_photo boolean not null default false,
   created_at timestamptz not null default timezone('utc', now())
 );
 
@@ -183,7 +186,7 @@ declare
   uid uuid := auth.uid();
   d date := (timezone('utc', now()))::date;
   current_count integer := 0;
-  max_count integer := 10;
+  max_count integer := 5;
 begin
   if uid is null then
     raise exception 'Not authenticated';
@@ -212,7 +215,7 @@ declare
   uid uuid := auth.uid();
   d date := (timezone('utc', now()))::date;
   current_count integer := 0;
-  max_count integer := 10;
+  max_count integer := 5;
   reservation_id uuid;
 begin
   if uid is null then
@@ -270,7 +273,7 @@ declare
   uid uuid := auth.uid();
   d date := (timezone('utc', now()))::date;
   current_count integer := 0;
-  max_count integer := 10;
+  max_count integer := 5;
   released_id uuid;
   reservation_date date;
 begin
@@ -328,7 +331,7 @@ declare
   uid uuid := auth.uid();
   d date := (timezone('utc', now()))::date;
   current_count integer := 0;
-  max_count integer := 10;
+  max_count integer := 5;
 begin
   if uid is null then
     raise exception 'Not authenticated';
@@ -392,6 +395,7 @@ create table if not exists public.guest_daily_usage (
     check (guest_id ~ '^[a-f0-9]{32}$'),
   usage_date date not null,
   solver_count integer not null default 0 check (solver_count >= 0),
+  photo_count integer not null default 0 check (photo_count >= 0),
   primary key (guest_id, usage_date)
 );
 
@@ -444,7 +448,7 @@ as $$
 declare
   d date := (timezone('utc', now()))::date;
   current_count integer := 0;
-  max_count integer := 10;
+  max_count integer := 5;
 begin
   if not public.guest_usage_secret_ok(p_secret) then
     raise exception 'Not authorized';
@@ -482,7 +486,7 @@ declare
   d date := (timezone('utc', now()))::date;
   current_count integer := 0;
   ip_count integer := 0;
-  max_count integer := 10;
+  max_count integer := 5;
   lock_first text;
   lock_second text;
 begin
@@ -591,7 +595,7 @@ declare
   d date := (timezone('utc', now()))::date;
   current_count integer := 0;
   ip_count integer := 0;
-  max_count integer := 10;
+  max_count integer := 5;
   lock_first text;
   lock_second text;
 begin

@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { FREE_DAILY_SOLVER_LIMIT } from "@/lib/constants";
+import {
+  FREE_DAILY_PHOTO_SOLVE_LIMIT,
+  FREE_DAILY_SOLVER_LIMIT,
+} from "@/lib/constants";
 import {
   attachGuestCookie,
   getGuestUsageSecret,
@@ -40,6 +43,9 @@ export async function GET(request: Request) {
         used: 0,
         limit: null,
         remaining: null,
+        photoUsed: 0,
+        photoLimit: null,
+        photoRemaining: null,
       });
     }
 
@@ -53,6 +59,8 @@ export async function GET(request: Request) {
     }
 
     const limit = usage.limit || planLimit || FREE_DAILY_SOLVER_LIMIT;
+    const photoLimit = usage.photoLimit || FREE_DAILY_PHOTO_SOLVE_LIMIT;
+    const photoUsed = usage.photoUsed || 0;
 
     return NextResponse.json({
       plan,
@@ -61,6 +69,9 @@ export async function GET(request: Request) {
       used: usage.used,
       limit,
       remaining: Math.max(0, limit - usage.used),
+      photoUsed,
+      photoLimit,
+      photoRemaining: Math.max(0, photoLimit - photoUsed),
     });
   }
 
@@ -90,6 +101,8 @@ export async function GET(request: Request) {
   }
 
   const limit = usage.limit || FREE_DAILY_SOLVER_LIMIT;
+  const photoLimit = usage.photoLimit || FREE_DAILY_PHOTO_SOLVE_LIMIT;
+  const photoUsed = usage.photoUsed || 0;
 
   return attachGuestCookie(
     NextResponse.json({
@@ -99,6 +112,9 @@ export async function GET(request: Request) {
       used: usage.used,
       limit,
       remaining: Math.max(0, limit - usage.used),
+      photoUsed,
+      photoLimit,
+      photoRemaining: Math.max(0, photoLimit - photoUsed),
     }),
     identity.cookieToSet
   );

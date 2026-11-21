@@ -6,7 +6,7 @@ export const GUEST_ID_COOKIE = "ema_guest_id";
  * Native apps (Android/iOS) can't rely on HTTP-only cookies, so they send the
  * same signed guest token in this request header and receive a freshly minted
  * token in GUEST_TOKEN_RESPONSE_HEADER. The token is the exact signed value the
- * web cookie carries, so guest limits (10 a day) are shared logic.
+ * web cookie carries, so guest limits (5 a day, including 1 photo) are shared logic.
  */
 export const GUEST_TOKEN_REQUEST_HEADER = "x-easymath-guest";
 export const GUEST_TOKEN_RESPONSE_HEADER = "x-easymath-guest-token";

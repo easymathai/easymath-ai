@@ -1,5 +1,9 @@
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import { AUTH_SESSION_COOKIE, readCookieValue } from "../auth-session-cookie";
+import {
+  FREE_DAILY_PHOTO_SOLVE_LIMIT,
+  FREE_DAILY_SOLVER_LIMIT,
+} from "../constants";
 import { resolveUserPlan, type UserPlan } from "../plans";
 import { getSupabasePublicKey, getSupabaseUrl, isSupabaseConfigured } from "./config";
 
@@ -114,10 +118,15 @@ export async function getUserPlanFromProfile(
   return resolveUserPlan(data?.plan, data?.plan_expires_at);
 }
 
+export type UsageLimitCode = "DAILY_LIMIT_REACHED" | "PHOTO_LIMIT_REACHED";
+
 export type ClaimUsageResult = {
   allowed: boolean;
   used: number;
   limit: number;
+  photoUsed: number;
+  photoLimit: number;
+  code?: UsageLimitCode;
 };
 
 export type SignedInClaimResult = ClaimUsageResult & {
@@ -129,12 +138,26 @@ function parseUsagePayload(data: unknown): ClaimUsageResult {
     allowed?: boolean;
     used?: number;
     limit?: number;
+    photo_used?: number;
+    photo_limit?: number;
+    code?: string;
   };
 
+  const allowed = Boolean(payload.allowed);
+  const code =
+    payload.code === "PHOTO_LIMIT_REACHED"
+      ? "PHOTO_LIMIT_REACHED"
+      : !allowed
+        ? "DAILY_LIMIT_REACHED"
+        : undefined;
+
   return {
-    allowed: Boolean(payload.allowed),
+    allowed,
     used: Number(payload.used) || 0,
-    limit: Number(payload.limit) || 10,
+    limit: Number(payload.limit) || FREE_DAILY_SOLVER_LIMIT,
+    photoUsed: Number(payload.photo_used) || 0,
+    photoLimit: Number(payload.photo_limit) || FREE_DAILY_PHOTO_SOLVE_LIMIT,
+    code,
   };
 }
 
@@ -162,9 +185,12 @@ function parseSignedInClaim(data: unknown): SignedInClaimResult {
 }
 
 export async function claimSolverUsage(
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  isPhoto = false
 ): Promise<SignedInClaimResult | null> {
-  const { data, error } = await supabase.rpc("claim_solver_usage");
+  const { data, error } = await supabase.rpc("claim_solver_usage", {
+    p_is_photo: isPhoto,
+  });
 
   if (error || !data) {
     console.error("claim_solver_usage error:", error);
@@ -208,7 +234,7 @@ export async function commitSolverUsage(
 
 export async function getSolverUsage(
   supabase: SupabaseClient
-): Promise<{ used: number; limit: number } | null> {
+): Promise<{ used: number; limit: number; photoUsed: number; photoLimit: number } | null> {
   const { data, error } = await supabase.rpc("get_solver_usage");
 
   if (error || !data) {
@@ -220,6 +246,8 @@ export async function getSolverUsage(
   return {
     used: parsed.used,
     limit: parsed.limit,
+    photoUsed: parsed.photoUsed,
+    photoLimit: parsed.photoLimit,
   };
 }
 
@@ -227,7 +255,8 @@ async function callGuestUsageRpc(
   fn: "get_guest_solver_usage" | "claim_guest_solver_usage" | "release_guest_solver_usage",
   guestId: string,
   secret: string,
-  ipGuestId?: string | null
+  ipGuestId?: string | null,
+  isPhoto = false
 ): Promise<ClaimUsageResult | null> {
   const supabase = createSupabaseAnonClient();
 
@@ -235,13 +264,17 @@ async function callGuestUsageRpc(
     return null;
   }
 
-  const args: Record<string, string> = {
+  const args: Record<string, string | boolean> = {
     p_guest_id: guestId,
     p_secret: secret,
   };
 
   if (ipGuestId) {
     args.p_ip_id = ipGuestId;
+  }
+
+  if (fn !== "get_guest_solver_usage") {
+    args.p_is_photo = isPhoto;
   }
 
   const { data, error } = await supabase.rpc(fn, args);
@@ -257,7 +290,7 @@ async function callGuestUsageRpc(
 export async function getGuestSolverUsage(
   guestId: string,
   secret: string
-): Promise<{ used: number; limit: number } | null> {
+): Promise<{ used: number; limit: number; photoUsed: number; photoLimit: number } | null> {
   const parsed = await callGuestUsageRpc(
     "get_guest_solver_usage",
     guestId,
@@ -271,31 +304,37 @@ export async function getGuestSolverUsage(
   return {
     used: parsed.used,
     limit: parsed.limit,
+    photoUsed: parsed.photoUsed,
+    photoLimit: parsed.photoLimit,
   };
 }
 
 export async function claimGuestSolverUsage(
   guestId: string,
   secret: string,
-  ipGuestId?: string | null
+  ipGuestId?: string | null,
+  isPhoto = false
 ): Promise<ClaimUsageResult | null> {
   return callGuestUsageRpc(
     "claim_guest_solver_usage",
     guestId,
     secret,
-    ipGuestId
+    ipGuestId,
+    isPhoto
   );
 }
 
 export async function releaseGuestSolverUsage(
   guestId: string,
   secret: string,
-  ipGuestId?: string | null
+  ipGuestId?: string | null,
+  isPhoto = false
 ): Promise<ClaimUsageResult | null> {
   return callGuestUsageRpc(
     "release_guest_solver_usage",
     guestId,
     secret,
-    ipGuestId
+    ipGuestId,
+    isPhoto
   );
 }

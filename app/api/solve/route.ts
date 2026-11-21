@@ -43,7 +43,9 @@ export async function POST(request: Request) {
 
     // Always enforce the Free daily solver limit. Client fields such as
     // usageMode, plan, or unlimited are ignored and cannot bypass billing.
-    const enforced = await enforceLoggedInSolverLimit(request);
+    const enforced = await enforceLoggedInSolverLimit(request, {
+      isPhoto: source === "photo",
+    });
 
     if (!enforced.ok) {
       return enforced.response;

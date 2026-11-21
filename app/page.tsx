@@ -19,10 +19,13 @@ import {
 } from "@/lib/client-auth";
 import {
   DAILY_LIMIT_MESSAGE,
+  FREE_DAILY_PHOTO_SOLVE_LIMIT,
   FREE_DAILY_SOLVER_LIMIT,
   FREE_PLAN_NAME,
+  FREE_PLAN_SUMMARY,
   IMAGE_TOO_LARGE_MESSAGE,
   MAX_IMAGE_UPLOAD_BYTES,
+  PHOTO_LIMIT_MESSAGE,
   utcUsageDate,
 } from "@/lib/constants";
 import {
@@ -187,6 +190,7 @@ function studentFriendlyError(message: unknown, fallback: string): string {
     "Something went wrong.":
       "Something went wrong. Please try again.",
     [DAILY_LIMIT_MESSAGE]: DAILY_LIMIT_MESSAGE,
+    [PHOTO_LIMIT_MESSAGE]: PHOTO_LIMIT_MESSAGE,
   };
 
   if (known[message]) {
@@ -349,6 +353,10 @@ export default function Home() {
   const [authBusy, setAuthBusy] = useState(false);
   const [dailyUsed, setDailyUsed] = useState(0);
   const [dailyLimit, setDailyLimit] = useState(FREE_DAILY_SOLVER_LIMIT);
+  const [dailyPhotoUsed, setDailyPhotoUsed] = useState(0);
+  const [dailyPhotoLimit, setDailyPhotoLimit] = useState(
+    FREE_DAILY_PHOTO_SOLVE_LIMIT
+  );
   const [userPlan, setUserPlan] = useState<UserPlan>("free");
   const [solverUnlimited, setSolverUnlimited] = useState(false);
   const [cloudEnabled] = useState(() => cloudAccountsAvailable());
@@ -507,6 +515,8 @@ export default function Home() {
       const localUsage = getLocalUsageSnapshot();
       setDailyUsed(localUsage.used);
       setDailyLimit(localUsage.limit);
+      setDailyPhotoUsed(localUsage.photoUsed);
+      setDailyPhotoLimit(localUsage.photoLimit);
     }
   }, []);
 
@@ -762,6 +772,8 @@ export default function Home() {
       const localUsage = getLocalUsageSnapshot();
       setDailyUsed(localUsage.used);
       setDailyLimit(localUsage.limit);
+      setDailyPhotoUsed(localUsage.photoUsed);
+      setDailyPhotoLimit(localUsage.photoLimit);
       setUserPlan("free");
       setSolverUnlimited(false);
       return;
@@ -779,6 +791,8 @@ export default function Home() {
       setSolverUnlimited(false);
       setDailyUsed(Number(usage.used) || 0);
       setDailyLimit(Number(usage.limit) || FREE_DAILY_SOLVER_LIMIT);
+      setDailyPhotoUsed(Number(usage.photoUsed) || 0);
+      setDailyPhotoLimit(Number(usage.photoLimit) || FREE_DAILY_PHOTO_SOLVE_LIMIT);
     } catch (error) {
       console.error("loadGuestUsage error:", error);
     }
@@ -932,10 +946,16 @@ export default function Home() {
           setSolverUnlimited(true);
           setDailyUsed(Number(usage.used) || 0);
           setDailyLimit(FREE_DAILY_SOLVER_LIMIT);
+          setDailyPhotoUsed(0);
+          setDailyPhotoLimit(FREE_DAILY_PHOTO_SOLVE_LIMIT);
         } else {
           setSolverUnlimited(false);
           setDailyUsed(Number(usage.used) || 0);
           setDailyLimit(Number(usage.limit) || FREE_DAILY_SOLVER_LIMIT);
+          setDailyPhotoUsed(Number(usage.photoUsed) || 0);
+          setDailyPhotoLimit(
+            Number(usage.photoLimit) || FREE_DAILY_PHOTO_SOLVE_LIMIT
+          );
         }
       }
 
@@ -1248,7 +1268,12 @@ export default function Home() {
   }
 
   function applyUsageFromResponse(data: {
-    usage?: { used?: number; limit?: number | null } | null;
+    usage?: {
+      used?: number;
+      limit?: number | null;
+      photoUsed?: number;
+      photoLimit?: number | null;
+    } | null;
   }) {
     if (!data.usage || typeof data.usage.used !== "number") {
       return;
@@ -1263,19 +1288,31 @@ export default function Home() {
     setSolverUnlimited(false);
     setDailyUsed(data.usage.used);
     setDailyLimit(Number(data.usage.limit) || FREE_DAILY_SOLVER_LIMIT);
+    if (typeof data.usage.photoUsed === "number") {
+      setDailyPhotoUsed(data.usage.photoUsed);
+    }
+    if (typeof data.usage.photoLimit === "number") {
+      setDailyPhotoLimit(data.usage.photoLimit);
+    }
   }
 
-  function guardSolverQuota(): boolean {
+  function guardSolverQuota(isPhoto = false): boolean {
     if (signedIn && solverUnlimited) {
       return true;
     }
 
     if (!signedIn && !cloudEnabled) {
-      if (!canUseLocalSolver()) {
-        setMessage(DAILY_LIMIT_MESSAGE);
+      if (!canUseLocalSolver(isPhoto)) {
         const snap = getLocalUsageSnapshot();
+        setMessage(
+          isPhoto && snap.photoRemaining <= 0 && snap.remaining > 0
+            ? PHOTO_LIMIT_MESSAGE
+            : DAILY_LIMIT_MESSAGE
+        );
         setDailyUsed(snap.used);
         setDailyLimit(snap.limit);
+        setDailyPhotoUsed(snap.photoUsed);
+        setDailyPhotoLimit(snap.photoLimit);
         return false;
       }
 
@@ -1284,6 +1321,11 @@ export default function Home() {
 
     if (dailyUsed >= dailyLimit) {
       setMessage(DAILY_LIMIT_MESSAGE);
+      return false;
+    }
+
+    if (isPhoto && dailyPhotoUsed >= dailyPhotoLimit) {
+      setMessage(PHOTO_LIMIT_MESSAGE);
       return false;
     }
 
@@ -1306,7 +1348,7 @@ export default function Home() {
       return;
     }
 
-    if (!guardSolverQuota()) {
+    if (!guardSolverQuota(solveSource === "photo")) {
       return;
     }
 
@@ -1342,7 +1384,12 @@ export default function Home() {
       if (!response.ok) {
         if (response.status === 429) {
           setMessage(
-            studentFriendlyError(data.error, DAILY_LIMIT_MESSAGE)
+            studentFriendlyError(
+              data.error,
+              data.code === "PHOTO_LIMIT_REACHED"
+                ? PHOTO_LIMIT_MESSAGE
+                : DAILY_LIMIT_MESSAGE
+            )
           );
           if (data.usage) {
             applyUsageFromResponse(data);
@@ -1365,9 +1412,11 @@ export default function Home() {
       if (signedIn || cloudEnabled) {
         applyUsageFromResponse(data);
       } else {
-        const consumed = consumeLocalSolver();
+        const consumed = consumeLocalSolver(solveSource === "photo");
         setDailyUsed(consumed.used);
         setDailyLimit(consumed.limit);
+        setDailyPhotoUsed(consumed.photoUsed);
+        setDailyPhotoLimit(consumed.photoLimit);
       }
 
       const result = data.solution || "No solution returned.";
@@ -1489,7 +1538,7 @@ export default function Home() {
       return;
     }
 
-    if (!guardSolverQuota()) {
+    if (!guardSolverQuota(true)) {
       return;
     }
 
@@ -1525,9 +1574,14 @@ export default function Home() {
       const data = await response.json();
 
       if (!response.ok) {
-        if (response.status === 429 && data.code === "DAILY_LIMIT_REACHED") {
+        if (response.status === 429) {
           setMessage(
-            studentFriendlyError(data.error, DAILY_LIMIT_MESSAGE)
+            studentFriendlyError(
+              data.error,
+              data.code === "PHOTO_LIMIT_REACHED"
+                ? PHOTO_LIMIT_MESSAGE
+                : DAILY_LIMIT_MESSAGE
+            )
           );
           if (data.usage) {
             applyUsageFromResponse(data);
@@ -2644,7 +2698,9 @@ export default function Home() {
     : FREE_PLAN_NAME;
   const usageLabel = solverUnlimited
     ? "Unlimited solver questions"
-    : `${dailyUsed} of ${dailyLimit} questions used today`;
+    : dailyPhotoUsed >= dailyPhotoLimit
+      ? `${dailyUsed} of ${dailyLimit} questions used today · photo used`
+      : `${dailyUsed} of ${dailyLimit} questions used today`;
 
   // Seed the practice set with the solver's practice question. Adjusted during
   // render rather than in an effect (no cascading render); converges because
@@ -3136,7 +3192,7 @@ export default function Home() {
               EasyMath Ai gives you the answer and explains each step at your level.
             </p>
             <ul className="em-trust" style={{ color: theme.text }}>
-              <li>10 free solves a day</li>
+              <li>5 free solves a day, including 1 photo</li>
               <li>No ads</li>
               <li>No sign-up to start</li>
               <li>Free photo read check</li>
@@ -3256,8 +3312,8 @@ export default function Home() {
                   {solverUnlimited
                     ? "Pro plan: unlimited solver questions. Practice Mode stays available."
                     : signedIn
-                      ? `Free plan: ${dailyUsed} of ${dailyLimit} solver questions used today. Practice does not use this limit.`
-                      : `Free plan: ${dailyUsed} of ${dailyLimit} solver questions used today. Practice does not use this limit. Log in to keep progress across devices.`}
+                      ? `Free plan: ${dailyUsed} of ${dailyLimit} solver questions used today, including 1 photo. Practice does not use this limit.`
+                      : `Free plan: ${dailyUsed} of ${dailyLimit} solver questions used today, including 1 photo. Practice does not use this limit. Log in to keep progress across devices.`}
                 </>
               )}
             </div>
@@ -6525,6 +6581,9 @@ export default function Home() {
                   }}
                 >
                   Your current plan
+                  <div style={{ fontWeight: 600, marginTop: 2 }}>
+                    {FREE_PLAN_SUMMARY}
+                  </div>
                 </div>
                 <ul
                   style={{
@@ -6538,8 +6597,8 @@ export default function Home() {
                     color: theme.text,
                   }}
                 >
-                  <li>10 AI solver questions per day</li>
-                  <li>Photo Solver included within the daily solver limit</li>
+                  <li>5 AI solver questions per day, including 1 photo</li>
+                  <li>Free photo read check before you solve</li>
                   <li>Practice Mode</li>
                   <li>Step-by-step explanations</li>
                   <li>Student level selection</li>

@@ -490,9 +490,12 @@ export async function POST(request: Request) {
         return limited.response;
       }
 
-      // Reserve a credit only to confirm the student still has solves left
-      // today, then always release it: reading the photo is free.
-      const readEnforced = await enforceLoggedInSolverLimit(request);
+      // Reading the photo is free and does not increment usage. Still block
+      // if the daily total or the 1-photo cap is already exhausted.
+      const readEnforced = await enforceLoggedInSolverLimit(request, {
+        isPhoto: true,
+        checkOnly: true,
+      });
 
       if (!readEnforced.ok) {
         return readEnforced.response;
@@ -533,7 +536,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const enforced = await enforceLoggedInSolverLimit(request);
+    const enforced = await enforceLoggedInSolverLimit(request, {
+      isPhoto: true,
+    });
 
     if (!enforced.ok) {
       return enforced.response;

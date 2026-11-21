@@ -37,7 +37,7 @@ export default function LandingFooter({ dark, muted, text, border }: LandingFoot
           </p>
           <p style={{ margin: "8px 0 0", lineHeight: 1.65, maxWidth: 320 }}>
             Snap or type any math problem and get clear, step-by-step help at your
-            level. 10 free solves a day, no ads.
+            level. 5 free solves a day including 1 photo, no ads.
           </p>
         </div>
         <nav aria-label="Product">

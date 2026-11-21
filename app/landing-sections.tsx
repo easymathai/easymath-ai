@@ -309,7 +309,7 @@ export function Subjects({ dark, theme }: SectionProps) {
 }
 
 const VALUE_POINTS = [
-  { big: "10", label: "free solves every day" },
+  { big: "5", label: "free solves a day, incl. 1 photo" },
   { big: "0", label: "ads — nothing between you and the answer" },
   { big: "0", label: "sign-ups needed to start" },
   { big: "Free", label: "photo read checks — they never use a solve" },
@@ -347,7 +347,7 @@ export function ValueStrip({
               FREE, FOR REAL
             </div>
             <h2 className="em-h2" style={{ color: "#fff", marginTop: 10 }}>
-              10 free solves a day.
+              5 free solves a day, including 1 photo.
               <br />
               No ads. No card.
             </h2>
@@ -406,7 +406,7 @@ export function Plans({
   onDetails,
 }: SectionProps & { onStart: () => void; onDetails: () => void }) {
   const free = [
-    "10 Ai solver questions a day",
+    "5 Ai solver questions a day, including 1 photo",
     "Photo solver with free read check",
     "Full step-by-step explanations",
     "Practice mode & mistake review",
@@ -486,7 +486,7 @@ export function Plans({
 const FAQS: { q: string; a: ReactNode }[] = [
   {
     q: "Is EasyMath Ai really free?",
-    a: "Yes. You get 10 solver questions every day with full step-by-step explanations, no ads and no card. Practice questions don't use your daily solves.",
+    a: "Yes. You get 5 solver questions every day, including 1 photo solve, with full step-by-step explanations, no ads and no card. Practice questions don't use your daily solves.",
   },
   {
     q: "Do I need an account?",
@@ -494,7 +494,7 @@ const FAQS: { q: string; a: ReactNode }[] = [
   },
   {
     q: "Does reading a photo use one of my solves?",
-    a: "No. We read the math from your photo first and show it to you. You can fix anything, and only pressing Solve uses a solve. If the photo can't be read, nothing is used.",
+    a: "No. We read the math from your photo first and show it to you. You can fix anything, and only pressing Solve uses a solve. If the photo can't be read, nothing is used. Free and guest plans include 1 photo solve a day; after that, type the question.",
   },
   {
     q: "Which levels and topics are covered?",

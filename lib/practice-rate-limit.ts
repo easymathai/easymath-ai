@@ -7,7 +7,7 @@ import { getRequestUser } from "./supabase/server";
 /**
  * Abuse limits for Practice Mode (generate / check answers).
  *
- * Practice stays free and does NOT count toward the 10-question daily solver
+ * Practice stays free and does NOT count toward the 5-question daily solver
  * limit. These caps are far above normal study use and only stop scripted
  * or runaway clients from burning OpenAI credits.
  *

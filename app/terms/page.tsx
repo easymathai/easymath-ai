@@ -50,8 +50,8 @@ export default function TermsPage() {
 
       <h2>Free plan</h2>
       <p>
-        The current public plan is Free: 10 solver questions per day, including
-        photo solves. Practice Mode does not use that daily solver limit. EasyMath
+        The current public plan is Free: 5 solver questions per day, of which
+        at most 1 may be a photo solve. Practice Mode does not use that daily solver limit. EasyMath
         may show a future Pro option in the app; paid-plan terms are not part of
         this V1 page because a paid checkout is not offered yet.
       </p>

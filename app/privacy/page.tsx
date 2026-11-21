@@ -23,7 +23,7 @@ export default function PrivacyPage() {
       <p>
         EasyMath is an educational math tool. You can type a question, upload a
         photo of a math problem, get a step-by-step solution, and use Practice
-        Mode. A Free plan currently allows 10 solver questions per day. Practice
+        Mode. A Free plan currently allows 5 solver questions per day, including 1 photo solve. Practice
         does not use that solver limit.
       </p>
 
