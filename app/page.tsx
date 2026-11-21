@@ -55,7 +55,10 @@ import {
 } from "@/lib/progress";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import Image from "next/image";
 import LandingFooter from "./landing-footer";
+import HowDemo from "./how-demo";
+import TutorSolution from "./tutor-solution";
 import {
   Faq,
   Features,
@@ -123,6 +126,15 @@ const PRACTICE_TOPICS: { id: PracticeTopic; label: string }[] = [
 ];
 
 const PRACTICE_SET_SIZE = 5;
+
+const QUICK_START: { topic: PracticeTopic; label: string; icon: string; example: string }[] = [
+  { topic: "algebra", label: "Algebra", icon: "x", example: "Simplify 3(x + 4) - 2x" },
+  { topic: "equations", label: "Equations", icon: "=", example: "Solve 2x + 7 = 19" },
+  { topic: "fractions", label: "Fractions", icon: "½", example: "Work out 3/4 + 5/6" },
+  { topic: "geometry", label: "Geometry", icon: "△", example: "Area of a circle with radius 5 cm" },
+  { topic: "percentages", label: "Percentages", icon: "%", example: "What is 15% of 240?" },
+  { topic: "arithmetic", label: "Arithmetic", icon: "+", example: "Work out 486 ÷ 6" },
+];
 
 function isStudentLevel(value: string): value is StudentLevel {
   return STUDENT_LEVELS.some((level) => level.id === value);
@@ -379,6 +391,11 @@ export default function Home() {
   const [reviewCompleted, setReviewCompleted] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [welcomeOpen, setWelcomeOpen] = useState(false);
+  const [followUp, setFollowUp] = useState("");
+  const [voiceListening, setVoiceListening] = useState(false);
+  const voiceRef = useRef<{ stop: () => void } | null>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const lastScrolledSolutionRef = useRef("");
 
@@ -1334,7 +1351,7 @@ export default function Home() {
 
   async function solveQuestion(
     customQuestion?: string,
-    options: { source?: "text" | "photo" } = {}
+    options: { source?: "text" | "photo"; level?: StudentLevel } = {}
   ) {
     const finalQuestion = customQuestion ?? question;
     const solveSource = options.source ?? "text";
@@ -1373,7 +1390,7 @@ export default function Home() {
         headers,
         body: JSON.stringify({
           question: finalQuestion,
-          level: studentLevel,
+          level: options.level ?? studentLevel,
           mathFormat: "latex",
           source: solveSource,
         }),
@@ -2544,6 +2561,123 @@ export default function Home() {
     setAuthModalOpen(true);
   }
 
+  const voiceSupported =
+    hasMounted &&
+    typeof window !== "undefined" &&
+    ("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
+
+  function toggleVoiceInput() {
+    if (voiceListening) {
+      voiceRef.current?.stop();
+      return;
+    }
+
+    type Recognition = {
+      lang: string;
+      interimResults: boolean;
+      maxAlternatives: number;
+      onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+      onend: (() => void) | null;
+      onerror: (() => void) | null;
+      start: () => void;
+      stop: () => void;
+    };
+    const speechWindow = window as unknown as {
+      SpeechRecognition?: new () => Recognition;
+      webkitSpeechRecognition?: new () => Recognition;
+    };
+    const Ctor = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
+
+    if (!Ctor) {
+      return;
+    }
+
+    const recognition = new Ctor();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event) => {
+      const transcript = event.results[0]?.[0]?.transcript?.trim();
+
+      if (transcript) {
+        setQuestion((current) => (current.trim() ? `${current.trim()} ${transcript}` : transcript));
+        setMessage("");
+      }
+    };
+    recognition.onend = () => {
+      setVoiceListening(false);
+      voiceRef.current = null;
+    };
+    recognition.onerror = () => {
+      setVoiceListening(false);
+      voiceRef.current = null;
+    };
+    voiceRef.current = recognition;
+    setVoiceListening(true);
+
+    try {
+      recognition.start();
+    } catch {
+      setVoiceListening(false);
+      voiceRef.current = null;
+    }
+  }
+
+  function explainSimpler() {
+    const order: StudentLevel[] = ["primary", "middle", "high", "advanced"];
+    const index = order.indexOf(studentLevel);
+    const simpler = order[Math.max(0, index - 1)];
+
+    if (simpler !== studentLevel) {
+      selectStudentLevel(simpler);
+    }
+
+    void solveQuestion(getSourceMathQuestion(detectedProblem || question, solution), {
+      source: lastSolveSource,
+      level: simpler,
+    });
+  }
+
+  function askFollowUp() {
+    const text = followUp.trim();
+
+    if (!text || loading || imageLoading) {
+      return;
+    }
+
+    const base = getSourceMathQuestion(detectedProblem || question, solution);
+    setFollowUp("");
+    void solveQuestion(`${base}\n\nFollow-up: ${text}`.slice(0, 1900));
+  }
+
+  function tryExample(example: string) {
+    setQuestion(example);
+    setMessage("");
+    document
+      .querySelector<HTMLTextAreaElement>("#solver textarea")
+      ?.focus({ preventScroll: true });
+  }
+
+  function practiceQuickTopic(topic: PracticeTopic) {
+    selectPracticeTopic(topic);
+    document.getElementById("practice")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    void startPracticeSet(topic);
+  }
+
+  function closeWelcome(tryProblem = false) {
+    setWelcomeOpen(false);
+
+    try {
+      localStorage.setItem("easymath-welcome-v1", "seen");
+    } catch {
+      // Storage can be blocked (private mode); the modal just closes.
+    }
+
+    if (tryProblem) {
+      tryExample("Solve 2x + 7 = 19");
+    }
+  }
+
   function focusSolver() {
     setNavOpen(false);
     document.getElementById("solver")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -2756,6 +2890,36 @@ export default function Home() {
   }, [solution, loading]);
 
   useEffect(() => {
+    let seen = true;
+
+    try {
+      seen = localStorage.getItem("easymath-welcome-v1") === "seen";
+    } catch {
+      seen = true;
+    }
+
+    if (!seen) {
+      const timer = window.setTimeout(() => setWelcomeOpen(true), 600);
+      return () => window.clearTimeout(timer);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!welcomeOpen) {
+      return;
+    }
+
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        closeWelcome();
+      }
+    }
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  useEffect(() => {
     if (!navOpen) {
       return;
     }
@@ -2919,7 +3083,7 @@ export default function Home() {
         /* ---------- Desktop-first landing + solver layout ---------- */
         .easymath-app { overflow-x: clip; }
         html { scroll-behavior: smooth; }
-        .easymath-app section[id], .easymath-app div[id="solver"] { scroll-margin-top: 84px; }
+        .easymath-app section[id], .easymath-app div[id="solver"] { scroll-margin-top: 16px; }
         .em-container { width: 100%; max-width: 1280px; margin: 0 auto; padding: 0 32px; }
         .em-nav { position: sticky; top: 0; z-index: 50; backdrop-filter: saturate(160%) blur(16px); -webkit-backdrop-filter: saturate(160%) blur(16px); }
         .em-nav-inner { display: flex; align-items: center; gap: 28px; height: 72px; }
@@ -2986,6 +3150,89 @@ export default function Home() {
         .em-footer-grid { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 32px; padding-top: 56px; padding-bottom: 40px; }
         .em-footer-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
         .em-footer-bottom { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding-top: 20px; padding-bottom: 24px; font-size: 13px; }
+        .em-tutor { display: grid; gap: 16px; }
+        .em-tutor-photo { display: inline-flex; align-items: center; gap: 12px; border: 1px solid; border-radius: 14px; padding: 8px 14px 8px 8px; width: fit-content; font-weight: 700; font-size: 13px; }
+        .em-tutor-photo img { width: 64px; height: 48px; object-fit: cover; border-radius: 10px; }
+        .em-tutor-answer { border-radius: 20px; padding: 18px 22px; }
+        .em-tutor-kicker { font-size: 11px; font-weight: 900; letter-spacing: 0.1em; margin-bottom: 6px; }
+        .em-tutor-steps ol { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; }
+        .em-tutor-step { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; padding: 14px 16px; border: 1px solid; border-radius: 16px; animation: em-step-in .25s ease; }
+        @keyframes em-step-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+        .em-tutor-num { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; font-weight: 900; color: #fff; background: linear-gradient(135deg,#7C3AED,#2563EB); }
+        .em-tutor-why { margin-top: 6px; font-size: 14px; line-height: 1.55; }
+        .em-tutor-reveal { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+        .em-tutor-notes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .em-tutor-notes > div { border: 1px solid; border-radius: 16px; padding: 14px 16px; }
+        .em-tutor-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+        .em-followup { position: sticky; bottom: 14px; z-index: 5; display: flex; gap: 8px; align-items: center; margin-top: 18px; padding: 8px 8px 8px 16px; border-radius: 16px; box-shadow: 0 12px 30px rgba(15,23,42,0.16); backdrop-filter: blur(12px); }
+        .em-followup input { flex: 1; min-width: 0; border: none !important; outline: none !important; background: transparent; font-size: 15px; font-weight: 600; }
+        @media (max-width: 680px) { .em-tutor-notes { grid-template-columns: 1fr; } }
+        /* ---------- v2 app shell ---------- */
+        .em-shell { display: grid; grid-template-columns: 252px minmax(0, 1fr); min-height: 100vh; }
+        .em-shell.is-collapsed { grid-template-columns: 76px minmax(0, 1fr); }
+        .em-sidebar { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; padding: 18px 14px; gap: 18px; z-index: 60; overflow-y: auto; }
+        .em-sidebar-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 42px; }
+        .em-sidebar-logo { display: inline-flex; align-items: center; padding-left: 6px; }
+        .em-collapse-btn { width: 32px; height: 32px; font-size: 15px; }
+        .em-side-nav { display: grid; gap: 4px; }
+        .em-side-link { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 12px; font-weight: 800; font-size: 15px; text-decoration: none; }
+        .em-side-link:hover { background: rgba(124,58,237,0.1); }
+        .em-side-link-sm { font-size: 14px; font-weight: 700; padding: 9px 12px; }
+        .em-side-icon { width: 24px; text-align: center; font-size: 18px; flex-shrink: 0; }
+        .em-side-divider { height: 1px; margin: 10px 6px; }
+        .em-sidebar-bottom { margin-top: auto; display: grid; gap: 10px; }
+        .em-usage-card { border-radius: 16px; padding: 12px 14px; }
+        .em-side-btn { width: 100%; }
+        .em-side-row { display: flex; align-items: center; gap: 10px; }
+        .em-credit { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; }
+        .em-shell.is-collapsed .em-label, .em-shell.is-collapsed .em-label-block { display: none !important; }
+        .em-shell.is-collapsed .em-sidebar-top { flex-direction: column; }
+        .em-shell.is-collapsed .em-side-link { justify-content: center; padding: 11px 0; }
+        .em-shell.is-collapsed .em-side-row { flex-direction: column; }
+        .em-topbar { display: none; }
+        .em-drawer-backdrop { display: none; }
+        .em-hero-center { max-width: 920px; text-align: center; }
+        .em-hero-center .em-hero-copy { padding-top: 8px; }
+        .em-hero-center .em-hero-lead { margin-left: auto; margin-right: auto; }
+        .em-hero-center .em-hero-title { font-size: 46px; }
+        .em-hero-center .em-solver-card { text-align: left; margin-top: 30px; }
+        .em-photo-hidden { display: none; }
+        .em-prompt-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 14px; padding-top: 14px; }
+        .em-tool-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid; border-radius: 11px; padding: 9px 13px; font-weight: 800; font-size: 14px; cursor: pointer; }
+        .em-tool-btn.is-live { box-shadow: 0 0 0 4px rgba(124,58,237,0.18); }
+        .em-level-select { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; font-size: 13px; }
+        .em-level-select select { border: 1px solid; border-radius: 11px; padding: 9px 10px; font-weight: 800; font-size: 14px; cursor: pointer; }
+        .em-quick { margin-top: 30px; text-align: left; }
+        .em-quick-head { font-weight: 800; font-size: 14px; margin-bottom: 12px; }
+        .em-quick-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+        .em-quick-card { border-radius: 18px; padding: 16px; display: grid; gap: 8px; transition: transform .15s ease; }
+        .em-quick-card:hover { transform: translateY(-2px); }
+        .em-quick-icon { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; background: linear-gradient(135deg,#7C3AED,#2563EB); color: #fff; font-weight: 900; font-size: 17px; }
+        .em-quick-example { font-size: 14px; font-weight: 600; }
+        .em-quick-actions { display: flex; gap: 14px; }
+        .em-quick-actions button { background: none; border: none; padding: 0; font-weight: 800; font-size: 13.5px; cursor: pointer; }
+        .em-demo-wrap { margin-top: 30px; text-align: left; }
+        .em-welcome-backdrop { position: fixed; inset: 0; z-index: 200; background: rgba(2,6,23,0.6); display: grid; place-items: center; padding: 16px; backdrop-filter: blur(4px); }
+        .em-welcome { position: relative; width: min(640px, 100%); border-radius: 26px; overflow: hidden; box-shadow: 0 40px 100px rgba(0,0,0,0.4); }
+        .em-welcome-close { position: absolute; top: 12px; right: 14px; z-index: 2; background: none; border: none; font-size: 20px; cursor: pointer; }
+        @media (max-width: 1024px) {
+          .em-shell, .em-shell.is-collapsed { grid-template-columns: 1fr; }
+          .em-sidebar { position: fixed; left: 0; top: 0; bottom: 0; width: 280px; transform: translateX(-105%); transition: transform .2s ease; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+          .em-sidebar.is-open { transform: none; }
+          .em-shell.is-collapsed .em-label, .em-shell.is-collapsed .em-label-block { display: revert !important; }
+          .em-collapse-btn { display: none; }
+          .em-drawer-backdrop { display: block; position: fixed; inset: 0; z-index: 55; background: rgba(2,6,23,.5); border: none; }
+          .em-topbar { display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 40; height: 60px; padding: 0 16px; backdrop-filter: blur(14px); }
+          .easymath-app section[id] { scroll-margin-top: 68px; }
+          .em-quick-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 680px) {
+          .em-hero-center .em-hero-title { font-size: 32px; }
+          .em-quick-grid { gap: 10px; }
+          .em-quick-card { padding: 12px; }
+          .em-tool-label { display: none; }
+          .em-level-select .em-tool-label { display: none; }
+        }
         @media (max-width: 1180px) {
           .em-usage-pill { display: none; }
           .em-hero-title { font-size: 50px; }
@@ -3045,122 +3292,170 @@ export default function Home() {
           .em-icon-btn { width: 40px; height: 40px; }
         }
       `}</style>
-      <header
-        className="em-nav"
-        style={{
-          background: darkMode ? "rgba(11,18,32,0.82)" : "rgba(255,255,255,0.85)",
-          borderBottom: `1px solid ${theme.border}`,
-        }}
-      >
-        <div className="em-container em-nav-inner">
-          <a href="#top" className="em-nav-logo" aria-label="EasyMath Ai home" onClick={() => setNavOpen(false)}>
-            <BrandLogo variant={darkMode ? "dark" : "light"} />
-          </a>
+      <div className={`em-shell${sidebarCollapsed ? " is-collapsed" : ""}`}>
+        {navOpen && (
+          <button
+            type="button"
+            aria-label="Close menu"
+            className="em-drawer-backdrop"
+            onClick={() => setNavOpen(false)}
+          />
+        )}
+        <aside
+          id="em-main-nav"
+          className={`em-sidebar${navOpen ? " is-open" : ""}`}
+          aria-label="Main"
+          style={{
+            background: darkMode ? "#0a1020" : "#ffffff",
+            borderRight: `1px solid ${theme.border}`,
+          }}
+        >
+          <div className="em-sidebar-top">
+            <a href="#top" className="em-sidebar-logo" aria-label="EasyMath Ai home" onClick={() => setNavOpen(false)}>
+              {sidebarCollapsed ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src="/favicon.svg" alt="EasyMath Ai" width={34} height={34} />
+              ) : (
+                <BrandLogo variant={darkMode ? "dark" : "light"} size="sm" />
+              )}
+            </a>
+            <button
+              type="button"
+              className="em-icon-btn em-collapse-btn"
+              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              onClick={() => setSidebarCollapsed((value) => !value)}
+              style={{ borderColor: theme.border, background: theme.buttonSoft, color: theme.text }}
+            >
+              {sidebarCollapsed ? "»" : "«"}
+            </button>
+          </div>
 
-          <nav
-            id="em-main-nav"
-            aria-label="Main"
-            className={`em-nav-links${navOpen ? " is-open" : ""}`}
-            style={{
-              background: navOpen ? (darkMode ? "#0b1220" : "#ffffff") : undefined,
-              borderColor: theme.border,
-            }}
-          >
+          <nav className="em-side-nav">
             {[
-              { href: "#solver", label: "Solver" },
-              { href: "#practice", label: "Practice" },
-              { href: "#progress", label: "Progress" },
-              { href: "#plans", label: "Plans" },
-            ].map((link) => (
+              { href: "#top", icon: "✨", label: "Solve" },
+              { href: "#practice", icon: "📝", label: "Practice" },
+              { href: "#workspace", icon: "🕘", label: "History" },
+              { href: "#progress", icon: "📈", label: "Progress" },
+            ].map((item) => (
               <a
-                key={link.href}
-                href={link.href}
-                className="em-nav-link"
+                key={item.href}
+                href={item.href}
+                className="em-side-link"
+                title={item.label}
                 style={{ color: theme.text }}
                 onClick={() => setNavOpen(false)}
               >
-                {link.label}
+                <span className="em-side-icon" aria-hidden="true">{item.icon}</span>
+                <span className="em-label">{item.label}</span>
               </a>
             ))}
-            <Link href="/support" className="em-nav-link" style={{ color: theme.text }}>
-              Support
+            <div className="em-side-divider" style={{ background: theme.border }} />
+            <a href="#plans" className="em-side-link em-side-link-sm" title="Plans" style={{ color: theme.muted }} onClick={() => setNavOpen(false)}>
+              <span className="em-side-icon" aria-hidden="true">💎</span>
+              <span className="em-label">Plans</span>
+            </a>
+            <Link href="/support" className="em-side-link em-side-link-sm" title="Support" style={{ color: theme.muted }}>
+              <span className="em-side-icon" aria-hidden="true">💬</span>
+              <span className="em-label">Support</span>
             </Link>
-            {!signedIn && (
-              <button
-                type="button"
-                className="em-btn em-btn-primary em-nav-menu-cta"
-                onClick={() => openAuth("signup")}
-              >
-                Get started — it&apos;s free
-              </button>
-            )}
           </nav>
 
-          <div className="em-nav-actions">
+          <div className="em-sidebar-bottom">
             <div
-              className="em-usage-pill"
+              className="em-usage-card em-label-block"
               style={{
-                background: darkMode ? "#14532d" : "#ecfdf5",
-                color: darkMode ? "#86efac" : "#15803d",
-                border: `1px solid ${darkMode ? "#166534" : "#bbf7d0"}`,
+                background: darkMode ? "rgba(124,58,237,0.12)" : "#f5f3ff",
+                border: `1px solid ${darkMode ? "rgba(124,58,237,0.35)" : "#e4dbff"}`,
               }}
             >
-              {usageLabel}
+              <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: "13px" }}>
+                <span>{planLabel} plan</span>
+                <span style={{ color: darkMode ? "#86EFAC" : "#059669" }}>
+                  {solverUnlimited ? "∞" : `${Math.max(0, dailyLimit - dailyUsed)} left`}
+                </span>
+              </div>
+              {!solverUnlimited && (
+                <div style={{ marginTop: "8px", height: "6px", borderRadius: "999px", background: darkMode ? "#1e293b" : "#e9e5ff", overflow: "hidden" }}>
+                  <div
+                    style={{
+                      width: `${Math.min(100, (dailyUsed / Math.max(1, dailyLimit)) * 100)}%`,
+                      height: "100%",
+                      background: "linear-gradient(90deg,#7C3AED,#2563EB)",
+                    }}
+                  />
+                </div>
+              )}
+              <div style={{ marginTop: "8px", color: theme.muted, fontSize: "12px", fontWeight: 600 }}>
+                {usageLabel}
+              </div>
             </div>
 
             {signedIn ? (
-              <button
-                type="button"
-                onClick={() => setAccountOpen(true)}
-                className="em-btn em-btn-ghost em-btn-sm"
-                style={{ color: theme.text, borderColor: theme.border, background: theme.buttonSoft }}
-              >
-                Account
+              <button type="button" onClick={() => setAccountOpen(true)} className="em-btn em-btn-ghost em-btn-sm em-side-btn" style={{ color: theme.text, borderColor: theme.border, background: theme.buttonSoft }} title="Account">
+                <span aria-hidden="true">👤</span>
+                <span className="em-label">Account</span>
               </button>
             ) : (
               <>
-                <button
-                  type="button"
-                  onClick={() => openAuth("login")}
-                  className="em-btn em-btn-ghost em-btn-sm"
-                  style={{ color: theme.text, borderColor: theme.border, background: theme.buttonSoft }}
-                >
-                  Sign in
+                <button type="button" onClick={() => openAuth("signup")} className="em-btn em-btn-primary em-btn-sm em-side-btn em-label-block">
+                  Get started free
                 </button>
-                <button
-                  type="button"
-                  onClick={() => openAuth("signup")}
-                  className="em-btn em-btn-primary em-btn-sm em-hide-sm"
-                >
-                  Get started
+                <button type="button" onClick={() => openAuth("login")} className="em-btn em-btn-ghost em-btn-sm em-side-btn" style={{ color: theme.text, borderColor: theme.border, background: theme.buttonSoft }} title="Log in">
+                  <span aria-hidden="true">→</span>
+                  <span className="em-label">Log in</span>
                 </button>
               </>
             )}
 
-            <button
-              type="button"
-              aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
-              onClick={toggleTheme}
-              className="em-icon-btn"
-              style={{ borderColor: theme.border, background: theme.buttonSoft }}
-            >
-              {darkMode ? "☀️" : "🌙"}
-            </button>
+            <div className="em-side-row">
+              <button
+                type="button"
+                aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+                onClick={toggleTheme}
+                className="em-icon-btn"
+                style={{ borderColor: theme.border, background: theme.buttonSoft }}
+              >
+                {darkMode ? "☀️" : "🌙"}
+              </button>
+              <span className="em-label em-credit" style={{ color: theme.muted }}>
+                <Image src="/branding/zayir-ai-logo-purple-dark.png" alt="zayir.ai" width={18} height={18} style={{ borderRadius: 4 }} />
+                by zayir.ai
+              </span>
+            </div>
+          </div>
+        </aside>
 
+        <div className="em-shell-main">
+          <div
+            className="em-topbar"
+            style={{
+              background: darkMode ? "rgba(11,18,32,0.9)" : "rgba(255,255,255,0.9)",
+              borderBottom: `1px solid ${theme.border}`,
+            }}
+          >
             <button
               type="button"
-              className="em-icon-btn em-menu-btn"
+              className="em-icon-btn"
               aria-label={navOpen ? "Close menu" : "Open menu"}
               aria-expanded={navOpen}
               aria-controls="em-main-nav"
               onClick={() => setNavOpen((open) => !open)}
               style={{ borderColor: theme.border, background: theme.buttonSoft, color: theme.text }}
             >
-              {navOpen ? "✕" : "☰"}
+              ☰
             </button>
+            <BrandLogo variant={darkMode ? "dark" : "light"} size="sm" />
+            {signedIn ? (
+              <button type="button" onClick={() => setAccountOpen(true)} className="em-btn em-btn-ghost em-btn-sm" style={{ color: theme.text, borderColor: theme.border, background: theme.buttonSoft, marginLeft: "auto" }}>
+                Account
+              </button>
+            ) : (
+              <button type="button" onClick={() => openAuth("login")} className="em-btn em-btn-ghost em-btn-sm" style={{ color: theme.text, borderColor: theme.border, background: theme.buttonSoft, marginLeft: "auto" }}>
+                Log in
+              </button>
+            )}
           </div>
-        </div>
-      </header>
+
 
       <section
         id="top"
@@ -3171,7 +3466,7 @@ export default function Home() {
             : "radial-gradient(900px 520px at 8% -10%, rgba(124,58,237,0.16), transparent 60%), radial-gradient(800px 520px at 100% 10%, rgba(37,99,235,0.16), transparent 60%), radial-gradient(700px 400px at 60% 110%, rgba(16,185,129,0.12), transparent 60%), #f8fafc",
         }}
       >
-        <div className="em-container em-hero-grid">
+        <div className="em-container em-hero-center">
           <div className="em-hero-copy">
             <div
               className="em-hero-pill"
@@ -3184,38 +3479,11 @@ export default function Home() {
               ✨ Your Personal Ai Math Tutor
             </div>
             <h1 className="em-hero-title" style={{ color: theme.text }}>
-              Solve any math problem.{" "}
-              <span className="em-gradient-text">Understand every step.</span>
+              What can I help you <span className="em-gradient-text">solve</span> today?
             </h1>
             <p className="em-hero-lead" style={{ color: theme.muted }}>
-              Type a question or snap a photo of printed or handwritten math.
-              EasyMath Ai gives you the answer and explains each step at your level.
+              Type it, snap it or say it. Get every step explained at your level — 10 free solves a day, no ads.
             </p>
-            <ul className="em-trust" style={{ color: theme.text }}>
-              <li>5 free solves a day, including 1 photo</li>
-              <li>No ads</li>
-              <li>No sign-up to start</li>
-              <li>Free photo read check</li>
-            </ul>
-            <div className="em-hero-proof">
-              {[
-                { big: "4", label: "levels, primary to calculus" },
-                { big: "3", label: "ways in: type, upload, paste" },
-                { big: "5", label: "question practice sets" },
-              ].map((item) => (
-                <div
-                  key={item.label}
-                  style={{
-                    background: theme.panel,
-                    border: `1px solid ${theme.border}`,
-                    boxShadow: theme.shadowSoft,
-                  }}
-                >
-                  <strong style={{ color: theme.text }}>{item.big}</strong>
-                  <span style={{ color: theme.muted }}>{item.label}</span>
-                </div>
-              ))}
-            </div>
           </div>
 
           <div
@@ -3239,9 +3507,7 @@ export default function Home() {
                 flexWrap: "wrap",
               }}
             >
-              <h2 style={{ margin: 0, fontSize: "22px", fontWeight: 900, letterSpacing: "-0.02em" }}>
-                What can I help you solve?
-              </h2>
+              <span style={{ fontWeight: 800, fontSize: "14px" }}>Ask EasyMath</span>
               <span style={{ color: theme.muted, fontSize: "13px", fontWeight: 700 }}>
                 {usageLabel}
               </span>
@@ -3319,85 +3585,6 @@ export default function Home() {
             </div>
             )}
 
-            <div
-              style={{
-                marginTop: "20px",
-                padding: "16px",
-                borderRadius: "18px",
-                border: `1px solid ${theme.border}`,
-                background: darkMode ? "#0b1220" : "#f8fafc",
-              }}
-            >
-              <div
-                style={{
-                  fontWeight: 900,
-                  fontSize: "13px",
-                  marginBottom: "6px",
-                  letterSpacing: "0.06em",
-                  textTransform: "uppercase",
-                  color: theme.muted,
-                }}
-              >
-                Student Level
-              </div>
-
-              <div
-                style={{
-                  color: theme.muted,
-                  fontSize: "14px",
-                  marginBottom: "14px",
-                  lineHeight: 1.5,
-                }}
-              >
-                Same correct answer. Explanations match the level you pick.
-              </div>
-
-              <div
-                role="group"
-                aria-label="Student Level"
-                style={{
-                  display: "flex",
-                  gap: "8px",
-                  flexWrap: "wrap",
-                }}
-              >
-                {STUDENT_LEVELS.map((level) => {
-                  const selected = studentLevel === level.id;
-
-                  return (
-                    <button
-                      key={level.id}
-                      type="button"
-                      aria-pressed={selected}
-                      onClick={() => selectStudentLevel(level.id)}
-                      style={{
-                        border: selected
-                          ? "1px solid #2563eb"
-                          : `1px solid ${theme.border}`,
-                        background: selected
-                          ? darkMode
-                            ? "linear-gradient(135deg,#1d4ed8,#2563eb)"
-                            : "linear-gradient(135deg,#2563eb,#1d4ed8)"
-                          : theme.buttonSoft,
-                        color: selected
-                          ? "#ffffff"
-                          : theme.text,
-                        padding: "9px 14px",
-                        borderRadius: "999px",
-                        fontWeight: 800,
-                        fontSize: "13px",
-                        cursor: "pointer",
-                        boxShadow: selected
-                          ? "0 8px 16px rgba(37,99,235,0.25)"
-                          : "none",
-                      }}
-                    >
-                      {level.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
 
             <div style={{ marginTop: "16px" }}>
             <textarea
@@ -3492,6 +3679,7 @@ export default function Home() {
               onDrop={handleSolverDrop}
               style={{ borderColor: dragActive ? "#7C3AED" : "transparent" }}
             >
+            <div className={imagePreview ? "" : "em-photo-hidden"}>
             <div
               style={{
                 marginTop: "22px",
@@ -3774,8 +3962,9 @@ export default function Home() {
                 </div>
               )}
             </div>
+            </div>
               {!imagePreview && (
-                <div className="em-drop-hint" style={{ color: theme.muted }}>
+                <div className="em-drop-hint" style={{ color: theme.muted, display: "none" }}>
                   or drag &amp; drop a photo here · paste a screenshot with Ctrl/⌘ + V
                 </div>
               )}
@@ -3796,80 +3985,121 @@ export default function Home() {
               </div>
             )}
 
-            <div className="easymath-actions">
+            <div className="em-prompt-toolbar" style={{ borderTop: `1px solid ${theme.border}` }}>
               <button
                 type="button"
-                onClick={() =>
-                  solveQuestion()
-                }
-                disabled={
-                  loading || imageLoading || solverLimitReached
-                }
-                style={{
-                  border: "none",
-
-                  background: solverLimitReached
-                    ? "#93c5fd"
-                    : "linear-gradient(135deg,#2563eb,#1d4ed8)",
-
-                  color: "white",
-
-                  padding: "14px 24px",
-
-                  borderRadius: "14px",
-
-                  fontWeight: 900,
-                  fontSize: "15px",
-
-                  cursor: solverLimitReached
-                    ? "not-allowed"
-                    : "pointer",
-                  boxShadow: solverLimitReached
-                    ? "none"
-                    : "0 10px 22px rgba(37,99,235,0.28)",
-                }}
+                className="em-tool-btn"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={loading || imageLoading || solverLimitReached}
+                title="Upload a photo"
+                style={{ color: theme.text, borderColor: theme.border, background: theme.buttonSoft }}
+              >
+                📷 <span className="em-tool-label">Photo</span>
+              </button>
+              {voiceSupported && (
+                <button
+                  type="button"
+                  className={`em-tool-btn${voiceListening ? " is-live" : ""}`}
+                  onClick={toggleVoiceInput}
+                  disabled={loading || imageLoading}
+                  aria-pressed={voiceListening}
+                  title={voiceListening ? "Stop listening" : "Say your question"}
+                  style={{ color: theme.text, borderColor: voiceListening ? "#7C3AED" : theme.border, background: theme.buttonSoft }}
+                >
+                  🎤 <span className="em-tool-label">{voiceListening ? "Listening…" : "Voice"}</span>
+                </button>
+              )}
+              <label className="em-level-select" style={{ color: theme.muted }}>
+                <span className="em-tool-label">Level</span>
+                <select
+                  value={studentLevel}
+                  onChange={(event) => {
+                    if (isStudentLevel(event.target.value)) {
+                      selectStudentLevel(event.target.value);
+                    }
+                  }}
+                  aria-label="Student level"
+                  style={{ color: theme.text, borderColor: theme.border, background: theme.buttonSoft }}
+                >
+                  {STUDENT_LEVELS.map((level) => (
+                    <option key={level.id} value={level.id}>
+                      {level.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div style={{ flex: 1 }} />
+              {(question || solution || imagePreview) && (
+                <button
+                  type="button"
+                  className="em-tool-btn"
+                  onClick={clearEverything}
+                  disabled={loading || imageLoading}
+                  style={{ color: theme.muted, borderColor: "transparent", background: "transparent" }}
+                >
+                  Clear
+                </button>
+              )}
+              <button
+                type="button"
+                className="em-btn em-btn-primary"
+                onClick={() => solveQuestion()}
+                disabled={loading || imageLoading || solverLimitReached}
               >
                 {loading ? (
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    <span className="easymath-spinner" aria-hidden="true" />
-                    Solving...
-                  </span>
+                  <>
+                    <span className="easymath-spinner" style={{ borderColor: "rgba(255,255,255,0.35)", borderTopColor: "#fff" }} />
+                    Solving…
+                  </>
                 ) : solverLimitReached ? (
                   "Daily limit reached"
                 ) : (
-                  "✨ Solve Now"
+                  "Solve →"
                 )}
               </button>
-
-              <button
-                type="button"
-                onClick={clearEverything}
-                disabled={loading || imageLoading}
-                style={{
-                  border: `1px solid ${theme.border}`,
-
-                  background:
-                    theme.buttonSoft,
-
-                  color: theme.text,
-
-                  padding: "15px 22px",
-
-                  borderRadius: "14px",
-
-                  fontWeight: 800,
-                  cursor: "pointer",
-                }}
-              >
-                Clear
-              </button>
             </div>
+          </div>
+          <div className="em-quick">
+            <div className="em-quick-head" style={{ color: theme.muted }}>
+              Quick start — try an example or practice a topic
+            </div>
+            <div className="em-quick-grid">
+              {QUICK_START.map((item) => (
+                <div
+                  key={item.topic}
+                  className="em-quick-card"
+                  style={{ background: theme.panel, border: `1px solid ${theme.border}`, boxShadow: theme.shadowSoft }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span className="em-quick-icon" aria-hidden="true">{item.icon}</span>
+                    <strong style={{ fontSize: "16px" }}>{item.label}</strong>
+                  </div>
+                  <div className="em-quick-example" style={{ color: theme.muted }}>
+                    {item.example}
+                  </div>
+                  <div className="em-quick-actions">
+                    <button
+                      type="button"
+                      onClick={() => tryExample(item.example)}
+                      style={{ color: "#7C3AED" }}
+                    >
+                      Try example
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => practiceQuickTopic(item.topic)}
+                      style={{ color: darkMode ? "#86EFAC" : "#059669" }}
+                    >
+                      Practice →
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="em-demo-wrap">
+            <HowDemo dark={darkMode} />
           </div>
         </div>
       </section>
@@ -4160,151 +4390,27 @@ export default function Home() {
                     </button>
                   </div>
 
-                  {parts["FINAL ANSWER"] && (
-                    <div
-                      style={{
-                        padding: "20px 22px",
-
-                        borderRadius: "18px",
-
-                        background: darkMode
-                          ? "#14532d"
-                          : "#ecfdf5",
-
-                        border:
-                          "1px solid #22c55e",
-                        boxShadow: theme.shadowSoft,
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontWeight: 900,
-                          fontSize: "12px",
-                          letterSpacing: "0.06em",
-                          color: darkMode
-                            ? "#86efac"
-                            : "#15803d",
-                        }}
-                      >
-                        ✅ FINAL ANSWER
-                      </div>
-
-                      <div
-                        style={{
-                          fontSize: "28px",
-                          fontWeight: 900,
-                          marginTop: "10px",
-                          letterSpacing: "-0.03em",
-                          lineHeight: 1.25,
-                        }}
-                      >
-                        <MathText text={parts["FINAL ANSWER"]} />
-                      </div>
-                    </div>
-                  )}
-
-                  {parts[
-                    "STEP-BY-STEP EXPLANATION"
-                  ] && (
-                    <div
-                      style={{
-                        padding: "20px 22px",
-                        borderRadius: "18px",
-
-                        background: darkMode
-                          ? "#172554"
-                          : "#eff6ff",
-
-                        border:
-                          "1px solid #3b82f6",
-                        boxShadow: theme.shadowSoft,
-                      }}
-                    >
-                      <strong>
-                        📘 STEP-BY-STEP
-                      </strong>
-
-                      <MathText
-                        text={parts["STEP-BY-STEP EXPLANATION"]}
-                        style={{
-                          whiteSpace:
-                            "pre-wrap",
-
-                          marginTop: "12px",
-
-                          lineHeight: 1.85,
-                        }}
-                      />
-                    </div>
-                  )}
-
-                  {parts["WHY IT WORKS"] && (
-                    <div
-                      style={{
-                        padding: "20px 22px",
-                        borderRadius: "18px",
-
-                        background: darkMode
-                          ? "#422006"
-                          : "#fffbeb",
-
-                        border:
-                          "1px solid #f59e0b",
-                        boxShadow: theme.shadowSoft,
-                      }}
-                    >
-                      <strong>
-                        💡 WHY IT WORKS
-                      </strong>
-
-                      <MathText
-                        text={parts["WHY IT WORKS"]}
-                        style={{
-                          whiteSpace:
-                            "pre-wrap",
-
-                          marginTop: "10px",
-
-                          lineHeight: 1.7,
-                        }}
-                      />
-                    </div>
-                  )}
-
-                  {parts[
-                    "COMMON MISTAKE"
-                  ] && (
-                    <div
-                      style={{
-                        padding: "20px 22px",
-                        borderRadius: "18px",
-
-                        background: darkMode
-                          ? "#4c0519"
-                          : "#fff1f2",
-
-                        border:
-                          "1px solid #fb7185",
-                        boxShadow: theme.shadowSoft,
-                      }}
-                    >
-                      <strong>
-                        ⚠️ COMMON MISTAKE
-                      </strong>
-
-                      <MathText
-                        text={parts["COMMON MISTAKE"]}
-                        style={{
-                          whiteSpace:
-                            "pre-wrap",
-
-                          marginTop: "10px",
-
-                          lineHeight: 1.7,
-                        }}
-                      />
-                    </div>
-                  )}
+                  <TutorSolution
+                    key={solution}
+                    finalAnswer={parts["FINAL ANSWER"]}
+                    stepsText={parts["STEP-BY-STEP EXPLANATION"]}
+                    whyItWorks={parts["WHY IT WORKS"]}
+                    commonMistake={parts["COMMON MISTAKE"]}
+                    imageSrc={lastSolveSource === "photo" && imagePreview ? imagePreview : undefined}
+                    dark={darkMode}
+                    theme={theme}
+                    busy={loading || imageLoading || practiceGenerating}
+                    onExplainSimpler={explainSimpler}
+                    onSimilar={() => practiceQuickTopic(practiceTopic)}
+                    onReport={() => {
+                      setReportOpen(true);
+                      window.setTimeout(() => {
+                        document
+                          .querySelector("[aria-label='Optional report details']")
+                          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                      }, 50);
+                    }}
+                  />
 
                   {!parts["FINAL ANSWER"] &&
                     !parts["STEP-BY-STEP EXPLANATION"] &&
@@ -4471,6 +4577,31 @@ export default function Home() {
                     </div>
                   )}
                 </div>
+              )}
+
+              {solution && !loading && !imageLoading && (
+                <form
+                  className="em-followup"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    askFollowUp();
+                  }}
+                  style={{
+                    background: darkMode ? "rgba(15,23,42,0.96)" : "rgba(255,255,255,0.96)",
+                    border: `1px solid ${theme.border}`,
+                  }}
+                >
+                  <input
+                    value={followUp}
+                    onChange={(event) => setFollowUp(event.target.value.slice(0, 300))}
+                    placeholder="Stuck on a step? Ask your tutor a follow-up…"
+                    aria-label="Follow-up question"
+                    style={{ color: theme.text }}
+                  />
+                  <button type="submit" className="em-btn em-btn-primary em-btn-sm" disabled={!followUp.trim() || solverLimitReached}>
+                    Ask
+                  </button>
+                </form>
               )}
 
               {!solution && !loading && !imageLoading && (
@@ -5944,7 +6075,61 @@ export default function Home() {
         text={theme.text}
         border={theme.border}
       />
+        </div>
+      </div>
 
+
+      {welcomeOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="easymath-welcome-title"
+          className="em-welcome-backdrop"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              closeWelcome();
+            }
+          }}
+        >
+          <div
+            className="em-welcome"
+            style={{ background: darkMode ? "#0f172a" : "#ffffff", color: theme.text, border: `1px solid ${theme.border}` }}
+          >
+            <button
+              type="button"
+              aria-label="Close"
+              className="em-welcome-close"
+              onClick={() => closeWelcome()}
+              style={{ color: theme.muted }}
+            >
+              ✕
+            </button>
+            <HowDemo dark={darkMode} compact />
+            <div style={{ padding: "22px 28px 28px" }}>
+              <h2 id="easymath-welcome-title" style={{ margin: 0, fontSize: "26px", fontWeight: 900, letterSpacing: "-0.02em" }}>
+                Welcome to EasyMath Ai 👋
+              </h2>
+              <p style={{ margin: "10px 0 0", color: theme.muted, lineHeight: 1.6 }}>
+                Snap or type any math problem. We read it, you check it, and your
+                personal Ai tutor explains every step. 10 free solves a day — no ads, no sign-up.
+              </p>
+              <div style={{ display: "flex", gap: "10px", marginTop: "20px", flexWrap: "wrap" }}>
+                <button type="button" className="em-btn em-btn-primary" onClick={() => closeWelcome(true)}>
+                  Try a problem
+                </button>
+                <button
+                  type="button"
+                  className="em-btn em-btn-ghost"
+                  onClick={() => closeWelcome()}
+                  style={{ color: theme.text, borderColor: theme.border }}
+                >
+                  Maybe later
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {authModalOpen && (
         <div

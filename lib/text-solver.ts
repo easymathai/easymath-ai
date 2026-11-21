@@ -39,6 +39,7 @@ Math formatting (important):
 - Put a key equation on its own line wrapped in double dollar signs when it helps, for example: $$2x + 5 = 15$$
 - Use \\frac{a}{b} for fractions, x^{2} for powers, \\sqrt{x} for roots, \\times for multiplication, \\div for division, \\pi for pi, ^\\circ for degrees.
 - Never use \\( \\) or \\[ \\] delimiters. Only $...$ and $$...$$.
+- In STEP-BY-STEP EXPLANATION, number each step (1., 2., 3.) and put one short line right after each step that starts with "Why:" and says why the step is allowed (under 15 words).
 - Keep the section heading lines (FINAL ANSWER, STEP-BY-STEP EXPLANATION, WHY IT WORKS, COMMON MISTAKE, PRACTICE QUESTION) as plain text with no dollar signs.
 - For money, write the word (for example "5 dollars" or "AED 5") instead of a bare dollar sign.
 - Keep normal words outside the dollar signs. Do not wrap whole sentences in math.
