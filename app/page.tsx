@@ -2,6 +2,9 @@
 
 import {
   ChangeEvent,
+  type ClipboardEvent,
+  type CSSProperties,
+  type DragEvent,
   useEffect,
   useEffectEvent,
   useMemo,
@@ -48,7 +51,18 @@ import {
   type PracticeDifficultyNudge,
 } from "@/lib/progress";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import SiteFooter from "./site-footer";
+import Link from "next/link";
+import LandingFooter from "./landing-footer";
+import {
+  Faq,
+  Features,
+  HowItWorks,
+  Plans,
+  SectionHead,
+  SolutionPreview,
+  Subjects,
+  ValueStrip,
+} from "./landing-sections";
 import MathText from "./math-text";
 import { mathToPlainText } from "@/lib/math-format";
 import BrandLogo from "./brand-logo";
@@ -355,6 +369,10 @@ export default function Home() {
   const [reviewHint, setReviewHint] = useState("");
   const [reviewCorrect, setReviewCorrect] = useState<boolean | null>(null);
   const [reviewCompleted, setReviewCompleted] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const lastScrolledSolutionRef = useRef("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const practicePanelRef = useRef<HTMLDivElement>(null);
@@ -1405,6 +1423,14 @@ export default function Home() {
 
     if (!file) return;
 
+    if (!acceptImageFile(file)) {
+      event.target.value = "";
+    }
+  }
+
+  /** Validates and selects a photo from the file picker, drag & drop or paste. */
+  function acceptImageFile(file: File): boolean {
+
     if (
       file.type &&
       !file.type.startsWith("image/") &&
@@ -1412,7 +1438,7 @@ export default function Home() {
       !file.type.toLowerCase().includes("heif")
     ) {
       setMessage("Please select an image file.");
-      return;
+      return false;
     }
 
     const name = file.name.toLowerCase();
@@ -1429,13 +1455,12 @@ export default function Home() {
       !name.endsWith(".webp")
     ) {
       setMessage("Please select an image file.");
-      return;
+      return false;
     }
 
     if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
       setMessage(IMAGE_TOO_LARGE_MESSAGE);
-      event.target.value = "";
-      return;
+      return false;
     }
 
     setImageFile(file);
@@ -1446,6 +1471,7 @@ export default function Home() {
 
     const preview = URL.createObjectURL(file);
     setImagePreview(preview);
+    return true;
   }
 
   /**
@@ -2453,6 +2479,68 @@ export default function Home() {
     setPracticeRevealedSolution("");
   }
 
+  function openAuth(mode: "login" | "signup") {
+    setNavOpen(false);
+    setAuthMode(mode);
+    setAuthMessage(
+      cloudEnabled
+        ? ""
+        : "Cloud accounts aren't available yet. You can still use EasyMath with the Free local limit."
+    );
+    setAuthModalOpen(true);
+  }
+
+  function focusSolver() {
+    setNavOpen(false);
+    document.getElementById("solver")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.setTimeout(() => {
+      document
+        .querySelector<HTMLTextAreaElement>("#solver textarea")
+        ?.focus({ preventScroll: true });
+    }, 450);
+  }
+
+  function selectDroppedOrPastedImage(file: File) {
+    if (loading || imageLoading) {
+      return;
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+
+    if (imagePreview) {
+      URL.revokeObjectURL(imagePreview);
+    }
+
+    acceptImageFile(file);
+  }
+
+  function handleSolverDrop(event: DragEvent<HTMLDivElement>) {
+    setDragActive(false);
+    const file = event.dataTransfer.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    event.preventDefault();
+    selectDroppedOrPastedImage(file);
+  }
+
+  function handleSolverPaste(event: ClipboardEvent<HTMLDivElement>) {
+    const file = Array.from(event.clipboardData.files || []).find((item) =>
+      item.type.startsWith("image/")
+    );
+
+    if (!file) {
+      return;
+    }
+
+    event.preventDefault();
+    selectDroppedOrPastedImage(file);
+  }
+
   function removeImage() {
     if (imagePreview) {
       URL.revokeObjectURL(imagePreview);
@@ -2588,6 +2676,44 @@ export default function Home() {
     }
   }, [practiceGenerating, practiceLaunchError, practiceSource]);
 
+  const practicePanelVisible =
+    !loading &&
+    !imageLoading &&
+    (practiceCompleted ||
+      Boolean(practiceQuestion) ||
+      practiceGenerating ||
+      Boolean(practiceLaunchError));
+
+  // Bring the solution panel into view when a solve starts and when a new
+  // solution (or a saved one from Recent Questions) appears.
+  useEffect(() => {
+    if (loading) {
+      workspaceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [loading]);
+
+  useEffect(() => {
+    if (solution && !loading && solution !== lastScrolledSolutionRef.current) {
+      lastScrolledSolutionRef.current = solution;
+      workspaceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [solution, loading]);
+
+  useEffect(() => {
+    if (!navOpen) {
+      return;
+    }
+
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setNavOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navOpen]);
+
   const theme = useMemo(
     () => ({
       page: darkMode ? "#0f172a" : "#f8fafc",
@@ -2619,28 +2745,27 @@ export default function Home() {
     [darkMode]
   );
 
+  const cardStyle: CSSProperties = {
+    background: theme.panel,
+    border: `1px solid ${theme.border}`,
+    boxShadow: theme.shadow,
+    backdropFilter: "blur(16px)",
+  };
+
   return (
     <main
       className="easymath-app"
       style={{
         minHeight: "100vh",
-
-        background: darkMode
-          ? "radial-gradient(circle at top left, #1e3a8a 0%, transparent 28%), radial-gradient(circle at bottom right, #14532d 0%, transparent 28%), #0f172a"
-          : "radial-gradient(circle at top left, #dbeafe 0%, transparent 32%), radial-gradient(circle at bottom right, #dcfce7 0%, transparent 32%), #f8fafc",
-
-        padding: "22px 16px 36px",
-
+        background: darkMode ? "#0b1220" : "#ffffff",
         fontFamily:
           "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
-
         color: theme.text,
         letterSpacing: "-0.011em",
       }}
     >
       <style>{`
         .easymath-app, .easymath-app * { box-sizing: border-box; }
-        .easymath-app { overflow-x: hidden; }
         .easymath-app button,
         .easymath-app textarea,
         .easymath-app input {
@@ -2675,9 +2800,6 @@ export default function Home() {
           }
           .easymath-h2 {
             font-size: 24px !important;
-          }
-          .easymath-app {
-            padding: 14px 12px 28px !important;
           }
         }
         @keyframes easymath-spin {
@@ -2738,203 +2860,338 @@ export default function Home() {
             min-height: 120px !important;
           }
         }
+        /* ---------- Desktop-first landing + solver layout ---------- */
+        .easymath-app { overflow-x: clip; }
+        html { scroll-behavior: smooth; }
+        .easymath-app section[id], .easymath-app div[id="solver"] { scroll-margin-top: 84px; }
+        .em-container { width: 100%; max-width: 1280px; margin: 0 auto; padding: 0 32px; }
+        .em-nav { position: sticky; top: 0; z-index: 50; backdrop-filter: saturate(160%) blur(16px); -webkit-backdrop-filter: saturate(160%) blur(16px); }
+        .em-nav-inner { display: flex; align-items: center; gap: 28px; height: 72px; }
+        .em-nav-logo { display: inline-flex; align-items: center; flex-shrink: 0; }
+        .em-nav-links { display: flex; align-items: center; gap: 4px; flex: 1; }
+        .em-nav-link { padding: 8px 12px; border-radius: 10px; font-weight: 700; font-size: 15px; text-decoration: none; opacity: 0.86; }
+        .em-nav-link:hover { opacity: 1; background: rgba(124,58,237,0.08); }
+        .em-nav-menu-cta { display: none !important; }
+        .em-nav-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+        .em-usage-pill { padding: 7px 12px; border-radius: 999px; font-weight: 800; font-size: 12px; white-space: nowrap; }
+        .em-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 12px; padding: 12px 20px; font-weight: 800; font-size: 15px; cursor: pointer; border: 1px solid transparent; text-decoration: none; transition: transform .15s ease, box-shadow .15s ease; }
+        .em-btn:hover { transform: translateY(-1px); }
+        .em-btn-sm { padding: 9px 15px; font-size: 14px; border-radius: 11px; }
+        .em-btn-primary { background: linear-gradient(135deg,#7C3AED 0%,#2563EB 100%); color: #fff; box-shadow: 0 10px 24px rgba(91,59,232,0.28); }
+        .em-btn-ghost { background: transparent; border: 1px solid; }
+        .em-btn-light { background: #fff; color: #1d2b6b; box-shadow: 0 10px 24px rgba(0,0,0,0.18); }
+        .em-icon-btn { width: 42px; height: 42px; border-radius: 12px; border: 1px solid; cursor: pointer; font-size: 17px; display: inline-grid; place-items: center; flex-shrink: 0; }
+        .em-menu-btn { display: none; }
+        .em-hero { padding: 64px 0 72px; }
+        .em-hero-grid { display: grid; grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr); gap: 56px; align-items: start; }
+        .em-hero-copy { padding-top: 28px; }
+        .em-hero-pill { display: inline-flex; padding: 8px 14px; border-radius: 999px; font-weight: 800; font-size: 14px; }
+        .em-hero-title { margin: 20px 0 0; font-size: 58px; line-height: 1.04; font-weight: 900; letter-spacing: -0.035em; }
+        .em-gradient-text { background: linear-gradient(135deg,#7C3AED 0%,#2563EB 70%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        .em-hero-lead { margin: 20px 0 0; font-size: 19px; line-height: 1.6; max-width: 540px; }
+        .em-trust { list-style: none; padding: 0; margin: 24px 0 0; display: flex; flex-wrap: wrap; gap: 10px 22px; font-weight: 700; font-size: 15px; }
+        .em-trust li::before { content: "✓"; color: #10B981; font-weight: 900; margin-right: 8px; }
+        .em-hero-proof { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 34px; max-width: 560px; }
+        .em-hero-proof > div { border-radius: 16px; padding: 14px 16px; display: grid; gap: 2px; }
+        .em-hero-proof strong { font-size: 26px; font-weight: 900; }
+        .em-hero-proof span { font-size: 13px; font-weight: 600; line-height: 1.35; }
+        .em-solver-card { border-radius: 28px; padding: 28px; backdrop-filter: blur(16px); }
+        .em-dropzone { margin-top: 0; border: 2px dashed transparent; border-radius: 20px; transition: border-color .15s ease, background .15s ease; }
+        .em-dropzone.is-active { background: rgba(124,58,237,0.07); }
+        .em-drop-hint { font-size: 13px; font-weight: 600; margin: 8px 4px 0; }
+        .em-section { padding: 88px 0; }
+        .em-workspace-section { padding: 48px 0 88px; }
+        .em-section-head { max-width: 760px; margin-bottom: 44px; }
+        .em-h2 { margin: 16px 0 0; font-size: 42px; line-height: 1.1; font-weight: 900; letter-spacing: -0.03em; }
+        .em-h3 { margin: 18px 0 8px; font-size: 20px; font-weight: 900; letter-spacing: -0.02em; }
+        .em-lead { margin: 14px 0 0; font-size: 18px; line-height: 1.6; }
+        .em-card { border-radius: 24px; padding: 26px; }
+        .em-workspace { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 24px; align-items: start; }
+        .em-workspace-side { position: sticky; top: 96px; display: grid; gap: 0; }
+        .em-workspace-main { min-height: 420px; }
+        .em-practice-grid { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 24px; align-items: start; }
+        .em-progress-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; align-items: start; }
+        .em-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; }
+        .em-grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
+        .em-value { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; padding: 52px; align-items: center; }
+        .em-value-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 30px; }
+        .em-compare { padding: 8px 22px; }
+        .em-compare-row { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 14px; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.14); font-size: 14px; line-height: 1.4; }
+        .em-compare-row:last-child { border-bottom: none; }
+        .em-compare-head { font-weight: 900; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #c7d2fe; }
+        .em-plans { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; max-width: 920px; margin: 0 auto; }
+        .em-checklist { list-style: none; padding: 0; margin: 22px 0 26px; display: grid; gap: 10px; font-weight: 600; }
+        .em-checklist li::before { content: "✓"; color: #10B981; font-weight: 900; margin-right: 10px; }
+        .em-faq-wrap { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 48px; align-items: start; }
+        .em-faq summary { cursor: pointer; font-weight: 800; font-size: 16.5px; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+        .em-faq summary::-webkit-details-marker { display: none; }
+        .em-faq summary::after { content: "+"; font-size: 22px; line-height: 1; color: #7C3AED; font-weight: 700; }
+        .em-faq[open] summary::after { content: "–"; }
+        .em-footer-grid { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 32px; padding-top: 56px; padding-bottom: 40px; }
+        .em-footer-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+        .em-footer-bottom { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding-top: 20px; padding-bottom: 24px; font-size: 13px; }
+        @media (max-width: 1180px) {
+          .em-usage-pill { display: none; }
+          .em-hero-title { font-size: 50px; }
+          .em-progress-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .em-progress-grid > :last-child { grid-column: 1 / -1; }
+          .em-grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 1024px) {
+          .em-nav-links { display: none; position: absolute; top: 72px; left: 0; right: 0; flex-direction: column; align-items: stretch; padding: 12px 20px 20px; border-bottom: 1px solid; box-shadow: 0 20px 40px rgba(15,23,42,0.18); }
+          .em-nav-links.is-open { display: flex; }
+          .em-nav-link { padding: 14px 12px; font-size: 17px; }
+          .em-nav-menu-cta { display: inline-flex !important; margin-top: 10px; }
+          .em-menu-btn { display: inline-grid; }
+          .em-hero-grid { grid-template-columns: 1fr; gap: 32px; }
+          .em-hero-copy { padding-top: 0; text-align: center; }
+          .em-hero-lead { margin-left: auto; margin-right: auto; }
+          .em-trust { justify-content: center; }
+          .em-hero-proof { margin-left: auto; margin-right: auto; }
+          .em-workspace { grid-template-columns: 1fr; }
+          .em-workspace-side { position: static; order: 2; }
+          .em-workspace-main { order: 1; min-height: 0; }
+          .em-practice-grid { grid-template-columns: 1fr; }
+          .em-grid-3 { grid-template-columns: 1fr 1fr; }
+          .em-value { grid-template-columns: 1fr; padding: 36px; }
+          .em-faq-wrap { grid-template-columns: 1fr; gap: 8px; }
+          .em-footer-grid { grid-template-columns: 1fr 1fr 1fr; }
+          .em-footer-grid > :first-child { grid-column: 1 / -1; }
+        }
+        @media (max-width: 680px) {
+          .em-container { padding: 0 16px; }
+          .em-nav-inner { height: 64px; gap: 12px; }
+          .em-nav-links { top: 64px; }
+          .em-hide-sm { display: none !important; }
+          .em-hero { padding: 28px 0 36px; }
+          .em-hero-title { font-size: 34px; margin-top: 14px; }
+          .em-hero-lead { font-size: 16px; margin-top: 12px; }
+          .em-trust { font-size: 13.5px; gap: 6px 14px; margin-top: 16px; }
+          .em-hero-proof { display: none; }
+          .em-solver-card { padding: 18px 16px; border-radius: 22px; }
+          .em-drop-hint { display: none; }
+          .em-section { padding: 56px 0; }
+          .em-workspace-section { padding: 8px 0 56px; }
+          .em-section-head { margin-bottom: 28px; }
+          .em-h2 { font-size: 30px; }
+          .em-lead { font-size: 16px; }
+          .em-card { padding: 18px 16px; border-radius: 20px; }
+          .em-progress-grid { grid-template-columns: 1fr; }
+          .em-grid-3, .em-grid-4 { grid-template-columns: 1fr; }
+          .em-value { padding: 26px 20px; gap: 24px; }
+          .em-value-stats { grid-template-columns: 1fr 1fr; }
+          .em-compare { padding: 4px 14px; }
+          .em-compare-row { grid-template-columns: 1fr 1fr; font-size: 13px; }
+          .em-compare-row > :first-child { grid-column: 1 / -1; }
+          .em-compare-head > :first-child { display: none; }
+          .em-plans { grid-template-columns: 1fr; }
+          .em-footer-grid { grid-template-columns: 1fr 1fr; padding-top: 40px; }
+          .em-icon-btn { width: 40px; height: 40px; }
+        }
       `}</style>
-      <div
+      <header
+        className="em-nav"
         style={{
-          maxWidth: "1180px",
-          margin: "0 auto",
+          background: darkMode ? "rgba(11,18,32,0.82)" : "rgba(255,255,255,0.85)",
+          borderBottom: `1px solid ${theme.border}`,
         }}
       >
-        <header
-          style={{
-            background: theme.panel,
-            border: `1px solid ${theme.border}`,
-            borderRadius: "22px",
-            padding: "16px 20px",
-            boxShadow: theme.shadowSoft,
-            marginBottom: "20px",
-            backdropFilter: "blur(16px)",
-          }}
-        >
-          <div
+        <div className="em-container em-nav-inner">
+          <a href="#top" className="em-nav-logo" aria-label="EasyMath Ai home" onClick={() => setNavOpen(false)}>
+            <BrandLogo variant={darkMode ? "dark" : "light"} />
+          </a>
+
+          <nav
+            id="em-main-nav"
+            aria-label="Main"
+            className={`em-nav-links${navOpen ? " is-open" : ""}`}
             style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: "18px",
-              flexWrap: "wrap",
+              background: navOpen ? (darkMode ? "#0b1220" : "#ffffff") : undefined,
+              borderColor: theme.border,
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "14px",
-              }}
-            >
-              <div>
-                <h1 className="easymath-title" style={{ margin: 0 }}>
-                  <BrandLogo variant={darkMode ? "dark" : "light"} />
-                </h1>
-                <p
-                  style={{
-                    margin: "8px 0 0",
-                    color: theme.muted,
-                    fontWeight: 600,
-                    fontSize: "14px",
-                  }}
-                >
-                  Your Personal Ai Math Tutor
-                </p>
-              </div>
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                gap: "10px",
-                alignItems: "center",
-                flexWrap: "wrap",
-              }}
-            >
-              <div
-                style={{
-                  padding: "8px 13px",
-                  borderRadius: "999px",
-                  background: darkMode ? "#14532d" : "#ecfdf5",
-                  color: darkMode ? "#86efac" : "#15803d",
-                  fontWeight: 800,
-                  fontSize: "12px",
-                  border: `1px solid ${darkMode ? "#166534" : "#bbf7d0"}`,
-                }}
+            {[
+              { href: "#solver", label: "Solver" },
+              { href: "#practice", label: "Practice" },
+              { href: "#progress", label: "Progress" },
+              { href: "#plans", label: "Plans" },
+            ].map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                className="em-nav-link"
+                style={{ color: theme.text }}
+                onClick={() => setNavOpen(false)}
               >
-                {usageLabel}
-              </div>
-
-              {signedIn ? (
-                <button
-                  type="button"
-                  onClick={() => setAccountOpen(true)}
-                  style={{
-                    border: `1px solid ${theme.border}`,
-                    background: theme.buttonSoft,
-                    color: theme.text,
-                    padding: "9px 14px",
-                    borderRadius: "999px",
-                    fontWeight: 800,
-                    fontSize: "13px",
-                    cursor: "pointer",
-                  }}
-                >
-                  Account
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthMode("login");
-                    setAuthMessage(
-                      cloudEnabled
-                        ? ""
-                        : "Cloud accounts aren't available yet. You can still use EasyMath with the Free local limit."
-                    );
-                    setAuthModalOpen(true);
-                  }}
-                  style={{
-                    border: "none",
-                    background: "linear-gradient(135deg,#2563eb,#1d4ed8)",
-                    color: "white",
-                    padding: "9px 14px",
-                    borderRadius: "999px",
-                    fontWeight: 800,
-                    fontSize: "13px",
-                    cursor: "pointer",
-                    boxShadow: "0 8px 16px rgba(37,99,235,0.25)",
-                  }}
-                >
-                  Log in
-                </button>
-              )}
-
+                {link.label}
+              </a>
+            ))}
+            <Link href="/support" className="em-nav-link" style={{ color: theme.text }}>
+              Support
+            </Link>
+            {!signedIn && (
               <button
                 type="button"
-                aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
-                onClick={toggleTheme}
-                style={{
-                  border: `1px solid ${theme.border}`,
-                  background: theme.buttonSoft,
-                  width: "44px",
-                  height: "44px",
-                  borderRadius: "14px",
-                  cursor: "pointer",
-                  fontSize: "18px",
-                  boxShadow: theme.shadowSoft,
-                }}
+                className="em-btn em-btn-primary em-nav-menu-cta"
+                onClick={() => openAuth("signup")}
               >
-                {darkMode ? "☀️" : "🌙"}
+                Get started — it&apos;s free
               </button>
+            )}
+          </nav>
+
+          <div className="em-nav-actions">
+            <div
+              className="em-usage-pill"
+              style={{
+                background: darkMode ? "#14532d" : "#ecfdf5",
+                color: darkMode ? "#86efac" : "#15803d",
+                border: `1px solid ${darkMode ? "#166534" : "#bbf7d0"}`,
+              }}
+            >
+              {usageLabel}
+            </div>
+
+            {signedIn ? (
+              <button
+                type="button"
+                onClick={() => setAccountOpen(true)}
+                className="em-btn em-btn-ghost em-btn-sm"
+                style={{ color: theme.text, borderColor: theme.border, background: theme.buttonSoft }}
+              >
+                Account
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => openAuth("login")}
+                  className="em-btn em-btn-ghost em-btn-sm"
+                  style={{ color: theme.text, borderColor: theme.border, background: theme.buttonSoft }}
+                >
+                  Sign in
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openAuth("signup")}
+                  className="em-btn em-btn-primary em-btn-sm em-hide-sm"
+                >
+                  Get started
+                </button>
+              </>
+            )}
+
+            <button
+              type="button"
+              aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+              onClick={toggleTheme}
+              className="em-icon-btn"
+              style={{ borderColor: theme.border, background: theme.buttonSoft }}
+            >
+              {darkMode ? "☀️" : "🌙"}
+            </button>
+
+            <button
+              type="button"
+              className="em-icon-btn em-menu-btn"
+              aria-label={navOpen ? "Close menu" : "Open menu"}
+              aria-expanded={navOpen}
+              aria-controls="em-main-nav"
+              onClick={() => setNavOpen((open) => !open)}
+              style={{ borderColor: theme.border, background: theme.buttonSoft, color: theme.text }}
+            >
+              {navOpen ? "✕" : "☰"}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <section
+        id="top"
+        className="em-hero"
+        style={{
+          background: darkMode
+            ? "radial-gradient(900px 520px at 8% -10%, rgba(124,58,237,0.38), transparent 60%), radial-gradient(800px 520px at 100% 10%, rgba(37,99,235,0.32), transparent 60%), radial-gradient(700px 400px at 60% 110%, rgba(16,185,129,0.14), transparent 60%), #0b1220"
+            : "radial-gradient(900px 520px at 8% -10%, rgba(124,58,237,0.16), transparent 60%), radial-gradient(800px 520px at 100% 10%, rgba(37,99,235,0.16), transparent 60%), radial-gradient(700px 400px at 60% 110%, rgba(16,185,129,0.12), transparent 60%), #f8fafc",
+        }}
+      >
+        <div className="em-container em-hero-grid">
+          <div className="em-hero-copy">
+            <div
+              className="em-hero-pill"
+              style={{
+                background: darkMode ? "rgba(134,239,172,0.1)" : "#ecfdf5",
+                color: darkMode ? "#86EFAC" : "#047857",
+                border: `1px solid ${darkMode ? "rgba(134,239,172,0.3)" : "#a7f3d0"}`,
+              }}
+            >
+              ✨ Your Personal Ai Math Tutor
+            </div>
+            <h1 className="em-hero-title" style={{ color: theme.text }}>
+              Solve any math problem.{" "}
+              <span className="em-gradient-text">Understand every step.</span>
+            </h1>
+            <p className="em-hero-lead" style={{ color: theme.muted }}>
+              Type a question or snap a photo of printed or handwritten math.
+              EasyMath Ai gives you the answer and explains each step at your level.
+            </p>
+            <ul className="em-trust" style={{ color: theme.text }}>
+              <li>10 free solves a day</li>
+              <li>No ads</li>
+              <li>No sign-up to start</li>
+              <li>Free photo read check</li>
+            </ul>
+            <div className="em-hero-proof">
+              {[
+                { big: "4", label: "levels, primary to calculus" },
+                { big: "3", label: "ways in: type, upload, paste" },
+                { big: "5", label: "question practice sets" },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  style={{
+                    background: theme.panel,
+                    border: `1px solid ${theme.border}`,
+                    boxShadow: theme.shadowSoft,
+                  }}
+                >
+                  <strong style={{ color: theme.text }}>{item.big}</strong>
+                  <span style={{ color: theme.muted }}>{item.label}</span>
+                </div>
+              ))}
             </div>
           </div>
-        </header>
 
-        <div
-          className="easymath-layout"
-        >
-          <section
+          <div
+            id="solver"
+            className="em-solver-card"
+            onPaste={handleSolverPaste}
             style={{
               background: theme.panel,
               border: `1px solid ${theme.border}`,
-              borderRadius: "24px",
-              padding: "26px 24px",
-              boxShadow: theme.shadow,
-              backdropFilter: "blur(16px)",
+              boxShadow: darkMode
+                ? "0 30px 80px rgba(0,0,0,0.45), 0 0 0 1px rgba(124,58,237,0.15)"
+                : "0 30px 80px rgba(37,99,235,0.14), 0 0 0 1px rgba(124,58,237,0.06)",
             }}
           >
             <div
               style={{
-                display: "inline-flex",
-                padding: "7px 12px",
-                borderRadius: "999px",
-
-                background: darkMode
-                  ? "#172554"
-                  : "#eef4ff",
-
-                color: darkMode
-                  ? "#bfdbfe"
-                  : "#2563eb",
-
-                fontWeight: 900,
-                fontSize: "11px",
-                letterSpacing: "0.08em",
-                border: `1px solid ${darkMode ? "#1e3a8a" : "#dbeafe"}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "12px",
+                flexWrap: "wrap",
               }}
             >
-              ✨ ASK EASYMATH
+              <h2 style={{ margin: 0, fontSize: "22px", fontWeight: 900, letterSpacing: "-0.02em" }}>
+                What can I help you solve?
+              </h2>
+              <span style={{ color: theme.muted, fontSize: "13px", fontWeight: 700 }}>
+                {usageLabel}
+              </span>
             </div>
 
-            <h2
-              className="easymath-h2"
-              style={{
-                margin: "16px 0 8px",
-                fontSize: "30px",
-                fontWeight: 900,
-                letterSpacing: "-0.03em",
-                lineHeight: 1.15,
-              }}
-            >
-              What math problem can I help you solve?
-            </h2>
-
-            <p
-              style={{
-                color: theme.muted,
-                lineHeight: 1.6,
-              }}
-            >
-              Type a question like 2x + 5 = 15, or upload a photo of printed or handwritten math.
-            </p>
-
+            {solverLimitReached && (
             <div
               style={{
                 marginTop: "16px",
@@ -3004,6 +3261,7 @@ export default function Home() {
                 </>
               )}
             </div>
+            )}
 
             <div
               style={{
@@ -3085,200 +3343,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div
-              style={{
-                marginTop: "16px",
-                padding: "16px",
-                borderRadius: "18px",
-                border: `1px solid ${theme.border}`,
-                background: darkMode ? "#0b1220" : "#f8fafc",
-              }}
-            >
-              <div
-                style={{
-                  fontWeight: 900,
-                  fontSize: "13px",
-                  marginBottom: "6px",
-                  letterSpacing: "0.06em",
-                  textTransform: "uppercase",
-                  color: theme.muted,
-                }}
-              >
-                Practice Topic
-              </div>
-
-              <div
-                style={{
-                  color: theme.muted,
-                  fontSize: "14px",
-                  marginBottom: "14px",
-                  lineHeight: 1.5,
-                }}
-              >
-                Choose a topic, then start a 5-question set. Check each answer — practice does not use your solver limit.
-              </div>
-
-              <div
-                role="group"
-                aria-label="Practice Topic"
-                style={{
-                  display: "flex",
-                  gap: "8px",
-                  flexWrap: "wrap",
-                }}
-              >
-                {PRACTICE_TOPICS.map((topic) => {
-                  const selected = practiceTopic === topic.id;
-
-                  return (
-                    <button
-                      key={topic.id}
-                      type="button"
-                      aria-pressed={selected}
-                      onClick={() => selectPracticeTopic(topic.id)}
-                      disabled={
-                        practiceGenerating ||
-                        practiceChecking ||
-                        practiceRevealing ||
-                        (practiceSource === "recommended" &&
-                          Boolean(practiceQuestion) &&
-                          !practiceCompleted)
-                      }
-                      style={{
-                        border: selected
-                          ? "1px solid #16a34a"
-                          : `1px solid ${theme.border}`,
-                        background: selected
-                          ? darkMode
-                            ? "linear-gradient(135deg,#15803d,#16a34a)"
-                            : "linear-gradient(135deg,#16a34a,#15803d)"
-                          : theme.buttonSoft,
-                        color: selected ? "#ffffff" : theme.text,
-                        padding: "9px 14px",
-                        borderRadius: "999px",
-                        fontWeight: 800,
-                        fontSize: "13px",
-                        cursor: "pointer",
-                        boxShadow: selected
-                          ? "0 8px 16px rgba(22,163,74,0.25)"
-                          : "none",
-                      }}
-                    >
-                      {topic.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {recommendedTopic && recommendedTopicLabel ? (
-                <div
-                  style={{
-                    marginTop: "12px",
-                  }}
-                >
-                  <div
-                    style={{
-                      color: theme.muted,
-                      fontSize: "13px",
-                      fontWeight: 700,
-                      marginBottom: "8px",
-                    }}
-                  >
-                    Recommended for you
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (
-                        recommendedBusy ||
-                        practiceGenerating ||
-                        practiceChecking ||
-                        practiceRevealing ||
-                        loading ||
-                        imageLoading
-                      ) {
-                        return;
-                      }
-
-                      if (
-                        recommendedTopic &&
-                        isPracticeTopic(recommendedTopic)
-                      ) {
-                        void startPracticeSet(recommendedTopic, true);
-                      }
-                    }}
-                    disabled={
-                      practiceGenerating ||
-                      practiceChecking ||
-                      practiceRevealing ||
-                      loading ||
-                      imageLoading
-                    }
-                    style={{
-                      width: "100%",
-                      border: "none",
-                      background: recommendedBusy
-                        ? "#86efac"
-                        : "linear-gradient(135deg,#16a34a,#15803d)",
-                      color: "white",
-                      padding: "11px 16px",
-                      borderRadius: "12px",
-                      fontWeight: 800,
-                      fontSize: "14px",
-                      cursor: recommendedBusy ? "wait" : "pointer",
-                      boxShadow: "0 8px 16px rgba(22,163,74,0.22)",
-                    }}
-                  >
-                    {recommendedBusy
-                      ? "Creating your practice..."
-                      : `Practice ${recommendedTopicLabel}`}
-                  </button>
-                  {recommendedExplanation ? (
-                    <div
-                      style={{
-                        marginTop: "8px",
-                        color: theme.muted,
-                        fontSize: "12px",
-                        fontWeight: 700,
-                        lineHeight: 1.45,
-                      }}
-                    >
-                      {recommendedExplanation}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              <button
-                type="button"
-                onClick={() => void startPracticeSet()}
-                disabled={
-                  practiceGenerating ||
-                  practiceChecking ||
-                  practiceRevealing ||
-                  loading ||
-                  imageLoading
-                }
-                style={{
-                  marginTop: "14px",
-                  border: "none",
-                  background: practiceGenerating
-                    ? "#86efac"
-                    : "linear-gradient(135deg,#16a34a,#15803d)",
-                  color: "white",
-                  padding: "11px 16px",
-                  borderRadius: "12px",
-                  fontWeight: 800,
-                  cursor: practiceGenerating ? "wait" : "pointer",
-                  boxShadow: "0 8px 16px rgba(22,163,74,0.22)",
-                }}
-              >
-                {practiceGenerating
-                  ? "Creating practice set..."
-                  : "Start 5-Question Practice"}
-              </button>
-            </div>
-
+            <div style={{ marginTop: "16px" }}>
             <textarea
               value={question}
               aria-label="Math question"
@@ -3315,6 +3380,7 @@ export default function Home() {
                   : "inset 0 1px 2px rgba(15,23,42,0.04)",
               }}
             />
+            </div>
 
             <div
               style={{
@@ -3354,6 +3420,22 @@ export default function Home() {
               ))}
             </div>
 
+            <div
+              className={`em-dropzone${dragActive ? " is-active" : ""}`}
+              onDragOver={(event) => {
+                if (Array.from(event.dataTransfer.types).includes("Files")) {
+                  event.preventDefault();
+                  setDragActive(true);
+                }
+              }}
+              onDragLeave={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                  setDragActive(false);
+                }
+              }}
+              onDrop={handleSolverDrop}
+              style={{ borderColor: dragActive ? "#7C3AED" : "transparent" }}
+            >
             <div
               style={{
                 marginTop: "22px",
@@ -3636,6 +3718,12 @@ export default function Home() {
                 </div>
               )}
             </div>
+              {!imagePreview && (
+                <div className="em-drop-hint" style={{ color: theme.muted }}>
+                  or drag &amp; drop a photo here · paste a screenshot with Ctrl/⌘ + V
+                </div>
+              )}
+            </div>
 
             {message && (
               <div
@@ -3726,7 +3814,188 @@ export default function Home() {
                 Clear
               </button>
             </div>
+          </div>
+        </div>
+      </section>
 
+      <section id="workspace" className="em-section em-workspace-section">
+        <div className="em-container">
+          <div className="em-workspace">
+            <aside className="em-workspace-side">
+              <div className="em-card" style={cardStyle}>
+            <div
+              style={{
+                display: "flex",
+
+                justifyContent:
+                  "space-between",
+
+                alignItems: "center",
+                gap: "12px",
+                flexWrap: "wrap",
+                marginBottom: "14px",
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    color: "#16a34a",
+
+                    fontSize: "11px",
+
+                    fontWeight: 900,
+                    letterSpacing: "0.08em",
+                  }}
+                >
+                  YOUR WORK
+                </div>
+
+                <h3
+                  style={{
+                    margin: "6px 0 0",
+                    fontSize: "22px",
+                    fontWeight: 900,
+                    letterSpacing: "-0.02em",
+                  }}
+                >
+                  Recent Questions
+                </h3>
+              </div>
+
+              {history.length > 0 && (
+                <button
+                  onClick={clearHistory}
+                  style={{
+                    border: "none",
+
+                    background:
+                      "transparent",
+
+                    color: theme.muted,
+
+                    fontWeight: 800,
+
+                    cursor: "pointer",
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+                {history.length === 0 && (
+                  <p style={{ margin: "4px 0 0", color: theme.muted, lineHeight: 1.6 }}>
+                    Your solved questions will appear here so you can jump back to any of them.
+                  </p>
+                )}
+
+            <div
+              style={{
+                display: "grid",
+                gap: "10px",
+              }}
+            >
+              {history.map(
+                (item, index) => (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      setQuestion(
+                        item.question
+                      );
+
+                      setSolution(
+                        item.solution
+                      );
+                    }}
+                    style={{
+                      width: "100%",
+
+                      textAlign: "left",
+
+                      padding: "13px 14px",
+
+                      border: `1px solid ${theme.border}`,
+
+                      borderRadius: "14px",
+
+                      background:
+                        theme.buttonSoft,
+
+                      color: theme.text,
+
+                      fontWeight: 700,
+                      fontSize: "14px",
+                      lineHeight: 1.4,
+
+                      cursor: "pointer",
+                    }}
+                  >
+                    {mathToPlainText(item.question)}
+                  </button>
+                )
+              )}
+            </div>
+
+                <button
+                  type="button"
+                  onClick={focusSolver}
+                  className="em-btn em-btn-ghost"
+                  style={{ width: "100%", marginTop: "16px", color: theme.text, borderColor: theme.border, background: theme.buttonSoft }}
+                >
+                  ＋ Ask a new question
+                </button>
+              </div>
+
+            <div
+              style={{
+                marginTop: "20px",
+
+                padding: "16px 18px",
+
+                borderRadius: "16px",
+                border: `1px solid ${darkMode ? "#1e3a8a" : "#dbeafe"}`,
+
+                background: darkMode
+                  ? "linear-gradient(135deg,#172554,#14532d)"
+                  : "linear-gradient(135deg,#eff6ff,#f0fdf4)",
+              }}
+            >
+              <strong>
+                Student Tip
+              </strong>
+
+              <div
+                style={{
+                  marginTop: "7px",
+
+                  color: theme.muted,
+
+                  fontSize: "14px",
+
+                  lineHeight: 1.6,
+                }}
+              >
+                Take a clear photo with the full math
+                question visible for the best result.
+              </div>
+            </div>
+            </aside>
+
+            <div ref={workspaceRef} className="em-workspace-main em-card" style={cardStyle}>
+              {!solution && (
+                <div
+                  style={{
+                    color: "#7C3AED",
+                    fontWeight: 900,
+                    fontSize: "11px",
+                    letterSpacing: "0.1em",
+                    marginBottom: "4px",
+                  }}
+                >
+                  SOLVER WORKSPACE
+                </div>
+              )}
             {(loading || imageLoading) && (
               <div
                 style={{
@@ -3756,7 +4025,7 @@ export default function Home() {
               !imageLoading && (
                 <div
                   style={{
-                    marginTop: "28px",
+                    marginTop: "12px",
                     display: "grid",
                     gap: "14px",
                   }}
@@ -4148,6 +4417,226 @@ export default function Home() {
                 </div>
               )}
 
+              {!solution && !loading && !imageLoading && (
+                <div style={{ marginTop: "14px" }}>
+                  <SolutionPreview dark={darkMode} theme={theme} />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="practice"
+        className="em-section"
+        style={{ background: darkMode ? "#0d1628" : "#f4f6fb" }}
+      >
+        <div className="em-container">
+          <SectionHead
+            dark={darkMode}
+            theme={theme}
+            eyebrow="PRACTICE MODE"
+            title="Practice that never uses your daily solves"
+            subtitle="Pick a topic, answer 5 questions, get hints when you're stuck and review every mistake."
+          />
+          <div className="em-practice-grid">
+            <div className="em-card" style={cardStyle}>
+            <div
+              style={{
+                marginTop: "16px",
+                padding: "16px",
+                borderRadius: "18px",
+                border: `1px solid ${theme.border}`,
+                background: darkMode ? "#0b1220" : "#f8fafc",
+              }}
+            >
+              <div
+                style={{
+                  fontWeight: 900,
+                  fontSize: "13px",
+                  marginBottom: "6px",
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  color: theme.muted,
+                }}
+              >
+                Practice Topic
+              </div>
+
+              <div
+                style={{
+                  color: theme.muted,
+                  fontSize: "14px",
+                  marginBottom: "14px",
+                  lineHeight: 1.5,
+                }}
+              >
+                Choose a topic, then start a 5-question set. Check each answer — practice does not use your solver limit.
+              </div>
+
+              <div
+                role="group"
+                aria-label="Practice Topic"
+                style={{
+                  display: "flex",
+                  gap: "8px",
+                  flexWrap: "wrap",
+                }}
+              >
+                {PRACTICE_TOPICS.map((topic) => {
+                  const selected = practiceTopic === topic.id;
+
+                  return (
+                    <button
+                      key={topic.id}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => selectPracticeTopic(topic.id)}
+                      disabled={
+                        practiceGenerating ||
+                        practiceChecking ||
+                        practiceRevealing ||
+                        (practiceSource === "recommended" &&
+                          Boolean(practiceQuestion) &&
+                          !practiceCompleted)
+                      }
+                      style={{
+                        border: selected
+                          ? "1px solid #16a34a"
+                          : `1px solid ${theme.border}`,
+                        background: selected
+                          ? darkMode
+                            ? "linear-gradient(135deg,#15803d,#16a34a)"
+                            : "linear-gradient(135deg,#16a34a,#15803d)"
+                          : theme.buttonSoft,
+                        color: selected ? "#ffffff" : theme.text,
+                        padding: "9px 14px",
+                        borderRadius: "999px",
+                        fontWeight: 800,
+                        fontSize: "13px",
+                        cursor: "pointer",
+                        boxShadow: selected
+                          ? "0 8px 16px rgba(22,163,74,0.25)"
+                          : "none",
+                      }}
+                    >
+                      {topic.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {recommendedTopic && recommendedTopicLabel ? (
+                <div
+                  style={{
+                    marginTop: "12px",
+                  }}
+                >
+                  <div
+                    style={{
+                      color: theme.muted,
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      marginBottom: "8px",
+                    }}
+                  >
+                    Recommended for you
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        recommendedBusy ||
+                        practiceGenerating ||
+                        practiceChecking ||
+                        practiceRevealing ||
+                        loading ||
+                        imageLoading
+                      ) {
+                        return;
+                      }
+
+                      if (
+                        recommendedTopic &&
+                        isPracticeTopic(recommendedTopic)
+                      ) {
+                        void startPracticeSet(recommendedTopic, true);
+                      }
+                    }}
+                    disabled={
+                      practiceGenerating ||
+                      practiceChecking ||
+                      practiceRevealing ||
+                      loading ||
+                      imageLoading
+                    }
+                    style={{
+                      width: "100%",
+                      border: "none",
+                      background: recommendedBusy
+                        ? "#86efac"
+                        : "linear-gradient(135deg,#16a34a,#15803d)",
+                      color: "white",
+                      padding: "11px 16px",
+                      borderRadius: "12px",
+                      fontWeight: 800,
+                      fontSize: "14px",
+                      cursor: recommendedBusy ? "wait" : "pointer",
+                      boxShadow: "0 8px 16px rgba(22,163,74,0.22)",
+                    }}
+                  >
+                    {recommendedBusy
+                      ? "Creating your practice..."
+                      : `Practice ${recommendedTopicLabel}`}
+                  </button>
+                  {recommendedExplanation ? (
+                    <div
+                      style={{
+                        marginTop: "8px",
+                        color: theme.muted,
+                        fontSize: "12px",
+                        fontWeight: 700,
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      {recommendedExplanation}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={() => void startPracticeSet()}
+                disabled={
+                  practiceGenerating ||
+                  practiceChecking ||
+                  practiceRevealing ||
+                  loading ||
+                  imageLoading
+                }
+                style={{
+                  marginTop: "14px",
+                  border: "none",
+                  background: practiceGenerating
+                    ? "#86efac"
+                    : "linear-gradient(135deg,#16a34a,#15803d)",
+                  color: "white",
+                  padding: "11px 16px",
+                  borderRadius: "12px",
+                  fontWeight: 800,
+                  cursor: practiceGenerating ? "wait" : "pointer",
+                  boxShadow: "0 8px 16px rgba(22,163,74,0.22)",
+                }}
+              >
+                {practiceGenerating
+                  ? "Creating practice set..."
+                  : "Start 5-Question Practice"}
+              </button>
+            </div>
+            </div>
+            <div className="em-card" style={cardStyle}>
             {!loading &&
               !imageLoading &&
               (practiceCompleted ||
@@ -4950,62 +5439,39 @@ export default function Home() {
                 )}
               </div>
             ) : null}
-          </section>
 
-          <aside
-            style={{
-              background: theme.panel,
-
-              border: `1px solid ${theme.border}`,
-
-              borderRadius: "24px",
-
-              padding: "22px",
-
-              boxShadow: theme.shadow,
-              backdropFilter: "blur(16px)",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-
-                justifyContent:
-                  "space-between",
-
-                alignItems: "center",
-                gap: "12px",
-                flexWrap: "wrap",
-                marginBottom: "14px",
-              }}
-            >
-              <div>
-                <div
-                  style={{
-                    color: "#16a34a",
-
-                    fontSize: "11px",
-
-                    fontWeight: 900,
-                    letterSpacing: "0.08em",
-                  }}
-                >
-                  YOUR DASHBOARD
+              {!practicePanelVisible && !reviewActive && (
+                <div style={{ textAlign: "center", padding: "36px 12px" }}>
+                  <div aria-hidden="true" style={{ fontSize: "40px" }}>📝</div>
+                  <div style={{ fontWeight: 900, fontSize: "19px", marginTop: "10px" }}>
+                    No practice in progress
+                  </div>
+                  <p style={{ color: theme.muted, lineHeight: 1.6, margin: "8px auto 0", maxWidth: "420px" }}>
+                    Choose a topic and start a 5-question set. Every solve also gives you a
+                    practice question to try here.
+                  </p>
                 </div>
-
-                <h3
-                  style={{
-                    margin: "6px 0 0",
-                    fontSize: "22px",
-                    fontWeight: 900,
-                    letterSpacing: "-0.02em",
-                  }}
-                >
-                  Student Progress
-                </h3>
-              </div>
+              )}
             </div>
+          </div>
+        </div>
+      </section>
 
+      <section id="progress" className="em-section">
+        <div className="em-container">
+          <SectionHead
+            dark={darkMode}
+            theme={theme}
+            eyebrow="YOUR DASHBOARD"
+            title="Student progress"
+            subtitle={
+              signedIn
+                ? "Your solves, accuracy, streaks and topics — synced to your account."
+                : "Track solves, accuracy, streaks and topics. Log in to keep progress across devices."
+            }
+          />
+          <div className="em-progress-grid">
+            <div className="em-card" style={cardStyle}>
             <div
               style={{
                 marginBottom: "16px",
@@ -5142,7 +5608,8 @@ export default function Home() {
                 </div>
               ))}
             </div>
-
+            </div>
+            <div className="em-card" style={cardStyle}>
             {namedTopicProgress.length > 0 ? (
               <div
                 style={{
@@ -5330,7 +5797,8 @@ export default function Home() {
                 </div>
               )}
             </div>
-
+            </div>
+            <div className="em-card" style={cardStyle}>
             {stats.activity.length > 0 && (
               <div
                 style={{
@@ -5389,153 +5857,38 @@ export default function Home() {
                 </div>
               </div>
             )}
-
-            <div
-              style={{
-                display: "flex",
-
-                justifyContent:
-                  "space-between",
-
-                alignItems: "center",
-                gap: "12px",
-                flexWrap: "wrap",
-                marginBottom: "14px",
-              }}
-            >
-              <div>
-                <div
-                  style={{
-                    color: "#16a34a",
-
-                    fontSize: "11px",
-
-                    fontWeight: 900,
-                    letterSpacing: "0.08em",
-                  }}
-                >
-                  YOUR WORK
+              {stats.activity.length === 0 && (
+                <div>
+                  <div style={{ fontWeight: 900, fontSize: "17px" }}>Recent activity</div>
+                  <p style={{ color: theme.muted, lineHeight: 1.6, margin: "8px 0 0" }}>
+                    Solves and practice answers show up here as you go.
+                  </p>
                 </div>
-
-                <h3
-                  style={{
-                    margin: "6px 0 0",
-                    fontSize: "22px",
-                    fontWeight: 900,
-                    letterSpacing: "-0.02em",
-                  }}
-                >
-                  Recent Questions
-                </h3>
-              </div>
-
-              {history.length > 0 && (
-                <button
-                  onClick={clearHistory}
-                  style={{
-                    border: "none",
-
-                    background:
-                      "transparent",
-
-                    color: theme.muted,
-
-                    fontWeight: 800,
-
-                    cursor: "pointer",
-                  }}
-                >
-                  Clear
-                </button>
               )}
             </div>
-
-            <div
-              style={{
-                display: "grid",
-                gap: "10px",
-              }}
-            >
-              {history.map(
-                (item, index) => (
-                  <button
-                    key={index}
-                    onClick={() => {
-                      setQuestion(
-                        item.question
-                      );
-
-                      setSolution(
-                        item.solution
-                      );
-                    }}
-                    style={{
-                      width: "100%",
-
-                      textAlign: "left",
-
-                      padding: "13px 14px",
-
-                      border: `1px solid ${theme.border}`,
-
-                      borderRadius: "14px",
-
-                      background:
-                        theme.buttonSoft,
-
-                      color: theme.text,
-
-                      fontWeight: 700,
-                      fontSize: "14px",
-                      lineHeight: 1.4,
-
-                      cursor: "pointer",
-                    }}
-                  >
-                    {mathToPlainText(item.question)}
-                  </button>
-                )
-              )}
-            </div>
-
-            <div
-              style={{
-                marginTop: "20px",
-
-                padding: "16px 18px",
-
-                borderRadius: "16px",
-                border: `1px solid ${darkMode ? "#1e3a8a" : "#dbeafe"}`,
-
-                background: darkMode
-                  ? "linear-gradient(135deg,#172554,#14532d)"
-                  : "linear-gradient(135deg,#eff6ff,#f0fdf4)",
-              }}
-            >
-              <strong>
-                Student Tip
-              </strong>
-
-              <div
-                style={{
-                  marginTop: "7px",
-
-                  color: theme.muted,
-
-                  fontSize: "14px",
-
-                  lineHeight: 1.6,
-                }}
-              >
-                Take a clear photo with the full math
-                question visible for the best result.
-              </div>
-            </div>
-          </aside>
+          </div>
         </div>
+      </section>
 
-        <SiteFooter compact muted={theme.muted} variant={darkMode ? "dark" : "light"} />
-      </div>
+      <HowItWorks dark={darkMode} theme={theme} />
+      <Features dark={darkMode} theme={theme} />
+      <Subjects dark={darkMode} theme={theme} />
+      <ValueStrip dark={darkMode} theme={theme} onStart={focusSolver} />
+      <Plans
+        dark={darkMode}
+        theme={theme}
+        onStart={focusSolver}
+        onDetails={() => setPricingOpen(true)}
+      />
+      <Faq dark={darkMode} theme={theme} />
+
+      <LandingFooter
+        dark={darkMode}
+        muted={theme.muted}
+        text={theme.text}
+        border={theme.border}
+      />
+
 
       {authModalOpen && (
         <div
