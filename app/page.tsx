@@ -2981,6 +2981,8 @@ export default function Home() {
         background: darkMode ? "#0b1220" : "#ffffff",
         fontFamily:
           "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+        fontSize: "16px",
+        lineHeight: 1.6,
         color: theme.text,
         letterSpacing: "-0.011em",
       }}
@@ -3090,14 +3092,14 @@ export default function Home() {
         .em-nav-inner { display: flex; align-items: center; gap: 28px; height: 72px; }
         .em-nav-logo { display: inline-flex; align-items: center; flex-shrink: 0; }
         .em-nav-links { display: flex; align-items: center; gap: 4px; flex: 1; }
-        .em-nav-link { padding: 8px 12px; border-radius: 10px; font-weight: 700; font-size: 15px; text-decoration: none; opacity: 0.86; }
+        .em-nav-link { padding: 8px 12px; border-radius: 10px; font-weight: 700; font-size: 16px; text-decoration: none; opacity: 0.86; }
         .em-nav-link:hover { opacity: 1; background: rgba(124,58,237,0.08); }
         .em-nav-menu-cta { display: none !important; }
         .em-nav-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
-        .em-usage-pill { padding: 7px 12px; border-radius: 999px; font-weight: 800; font-size: 12px; white-space: nowrap; }
-        .em-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 12px; padding: 12px 20px; font-weight: 800; font-size: 15px; cursor: pointer; border: 1px solid transparent; text-decoration: none; transition: transform .15s ease, box-shadow .15s ease; }
+        .em-usage-pill { padding: 7px 12px; border-radius: 999px; font-weight: 800; font-size: 13px; white-space: nowrap; }
+        .em-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 12px; padding: 12px 20px; font-weight: 800; font-size: 16px; cursor: pointer; border: 1px solid transparent; text-decoration: none; transition: transform .15s ease, box-shadow .15s ease; }
         .em-btn:hover { transform: translateY(-1px); }
-        .em-btn-sm { padding: 9px 15px; font-size: 14px; border-radius: 11px; }
+        .em-btn-sm { padding: 9px 15px; font-size: 15px; border-radius: 11px; }
         .em-btn-primary { background: linear-gradient(135deg,#7C3AED 0%,#2563EB 100%); color: #fff; box-shadow: 0 10px 24px rgba(91,59,232,0.28); }
         .em-btn-ghost { background: transparent; border: 1px solid; }
         .em-btn-light { background: #fff; color: #1d2b6b; box-shadow: 0 10px 24px rgba(0,0,0,0.18); }
@@ -3106,20 +3108,20 @@ export default function Home() {
         .em-hero { padding: 64px 0 72px; }
         .em-hero-grid { display: grid; grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr); gap: 56px; align-items: start; }
         .em-hero-copy { padding-top: 28px; }
-        .em-hero-pill { display: inline-flex; padding: 8px 14px; border-radius: 999px; font-weight: 800; font-size: 14px; }
+        .em-hero-pill { display: inline-flex; padding: 8px 14px; border-radius: 999px; font-weight: 800; font-size: 15px; }
         .em-hero-title { margin: 20px 0 0; font-size: 58px; line-height: 1.04; font-weight: 900; letter-spacing: -0.035em; }
         .em-gradient-text { background: linear-gradient(135deg,#7C3AED 0%,#2563EB 70%); -webkit-background-clip: text; background-clip: text; color: transparent; }
         .em-hero-lead { margin: 20px 0 0; font-size: 19px; line-height: 1.6; max-width: 540px; }
-        .em-trust { list-style: none; padding: 0; margin: 24px 0 0; display: flex; flex-wrap: wrap; gap: 10px 22px; font-weight: 700; font-size: 15px; }
+        .em-trust { list-style: none; padding: 0; margin: 24px 0 0; display: flex; flex-wrap: wrap; gap: 10px 22px; font-weight: 700; font-size: 16px; }
         .em-trust li::before { content: "✓"; color: #10B981; font-weight: 900; margin-right: 8px; }
         .em-hero-proof { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 34px; max-width: 560px; }
         .em-hero-proof > div { border-radius: 16px; padding: 14px 16px; display: grid; gap: 2px; }
         .em-hero-proof strong { font-size: 26px; font-weight: 900; }
-        .em-hero-proof span { font-size: 13px; font-weight: 600; line-height: 1.35; }
+        .em-hero-proof span { font-size: 14px; font-weight: 600; line-height: 1.35; }
         .em-solver-card { border-radius: 28px; padding: 28px; backdrop-filter: blur(16px); }
         .em-dropzone { margin-top: 0; border: 2px dashed transparent; border-radius: 20px; transition: border-color .15s ease, background .15s ease; }
         .em-dropzone.is-active { background: rgba(124,58,237,0.07); }
-        .em-drop-hint { font-size: 13px; font-weight: 600; margin: 8px 4px 0; }
+        .em-drop-hint { font-size: 14px; font-weight: 600; margin: 8px 4px 0; }
         .em-section { padding: 88px 0; }
         .em-workspace-section { padding: 48px 0 88px; }
         .em-section-head { max-width: 760px; margin-bottom: 44px; }
@@ -3137,9 +3139,9 @@ export default function Home() {
         .em-value { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; padding: 52px; align-items: center; }
         .em-value-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 30px; }
         .em-compare { padding: 8px 22px; }
-        .em-compare-row { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 14px; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.14); font-size: 14px; line-height: 1.4; }
+        .em-compare-row { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 14px; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.14); font-size: 15px; line-height: 1.4; }
         .em-compare-row:last-child { border-bottom: none; }
-        .em-compare-head { font-weight: 900; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #c7d2fe; }
+        .em-compare-head { font-weight: 900; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: #c7d2fe; }
         .em-plans { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; max-width: 920px; margin: 0 auto; }
         .em-checklist { list-style: none; padding: 0; margin: 22px 0 26px; display: grid; gap: 10px; font-weight: 600; }
         .em-checklist li::before { content: "✓"; color: #10B981; font-weight: 900; margin-right: 10px; }
@@ -3150,45 +3152,45 @@ export default function Home() {
         .em-faq[open] summary::after { content: "–"; }
         .em-footer-grid { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 32px; padding-top: 56px; padding-bottom: 40px; }
         .em-footer-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
-        .em-footer-bottom { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding-top: 20px; padding-bottom: 24px; font-size: 13px; }
+        .em-footer-bottom { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding-top: 20px; padding-bottom: 24px; font-size: 14px; }
         .em-tutor { display: grid; gap: 16px; }
-        .em-tutor-photo { display: inline-flex; align-items: center; gap: 12px; border: 1px solid; border-radius: 14px; padding: 8px 14px 8px 8px; width: fit-content; font-weight: 700; font-size: 13px; }
+        .em-tutor-photo { display: inline-flex; align-items: center; gap: 12px; border: 1px solid; border-radius: 14px; padding: 8px 14px 8px 8px; width: fit-content; font-weight: 700; font-size: 14px; }
         .em-tutor-photo img { width: 64px; height: 48px; object-fit: cover; border-radius: 10px; }
         .em-tutor-answer { border-radius: 20px; padding: 18px 22px; }
-        .em-tutor-kicker { font-size: 11px; font-weight: 900; letter-spacing: 0.1em; margin-bottom: 6px; }
+        .em-tutor-kicker { font-size: 13px; font-weight: 900; letter-spacing: 0.1em; margin-bottom: 6px; }
         .em-tutor-steps ol { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; }
         .em-tutor-step { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; padding: 14px 16px; border: 1px solid; border-radius: 16px; animation: em-step-in .25s ease; }
         @keyframes em-step-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
         .em-tutor-num { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; font-weight: 900; color: #fff; background: linear-gradient(135deg,#7C3AED,#2563EB); }
-        .em-tutor-why { margin-top: 6px; font-size: 14px; line-height: 1.55; }
+        .em-tutor-why { margin-top: 6px; font-size: 15px; line-height: 1.55; }
         .em-tutor-reveal { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
         .em-tutor-notes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         .em-tutor-notes > div { border: 1px solid; border-radius: 16px; padding: 14px 16px; }
         .em-tutor-chips { display: flex; flex-wrap: wrap; gap: 8px; }
         .em-followup { position: sticky; bottom: 14px; z-index: 5; display: flex; gap: 8px; align-items: center; margin-top: 18px; padding: 8px 8px 8px 16px; border-radius: 16px; box-shadow: 0 12px 30px rgba(15,23,42,0.16); backdrop-filter: blur(12px); }
-        .em-followup input { flex: 1; min-width: 0; border: none !important; outline: none !important; background: transparent; font-size: 15px; font-weight: 600; }
+        .em-followup input { flex: 1; min-width: 0; border: none !important; outline: none !important; background: transparent; font-size: 16px; font-weight: 600; }
         @media (max-width: 680px) { .em-tutor-notes { grid-template-columns: 1fr; } }
         .em-skeleton { display: grid; gap: 10px; }
         .em-skeleton span { display: block; height: 12px; border-radius: 999px; background: linear-gradient(90deg, rgba(124,58,237,0.12), rgba(37,99,235,0.22), rgba(124,58,237,0.12)); background-size: 200% 100%; animation: em-skel 1.4s ease-in-out infinite; }
         @keyframes em-skel { from { background-position: 200% 0; } to { background-position: -200% 0; } }
         /* ---------- v2 app shell ---------- */
-        .em-shell { display: grid; grid-template-columns: 252px minmax(0, 1fr); min-height: 100vh; }
-        .em-shell.is-collapsed { grid-template-columns: 76px minmax(0, 1fr); }
+        .em-shell { display: grid; grid-template-columns: 268px minmax(0, 1fr); min-height: 100vh; }
+        .em-shell.is-collapsed { grid-template-columns: 80px minmax(0, 1fr); }
         .em-sidebar { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; padding: 18px 14px; gap: 18px; z-index: 60; overflow-y: auto; }
         .em-sidebar-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 42px; }
         .em-sidebar-logo { display: inline-flex; align-items: center; padding-left: 6px; }
-        .em-collapse-btn { width: 32px; height: 32px; font-size: 15px; }
+        .em-collapse-btn { width: 32px; height: 32px; font-size: 16px; }
         .em-side-nav { display: grid; gap: 4px; }
-        .em-side-link { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 12px; font-weight: 800; font-size: 15px; text-decoration: none; }
+        .em-side-link { display: flex; align-items: center; gap: 12px; min-height: 42px; padding: 9px 12px; border-radius: 12px; font-weight: 700; font-size: 15px; text-decoration: none; }
         .em-side-link:hover { background: rgba(124,58,237,0.1); }
-        .em-side-link-sm { font-size: 14px; font-weight: 700; padding: 9px 12px; }
-        .em-side-icon { width: 24px; text-align: center; font-size: 18px; flex-shrink: 0; }
+        .em-side-link-sm { font-size: 15px; font-weight: 700; padding: 9px 12px; }
+        .em-side-icon { width: 24px; text-align: center; font-size: 20px; flex-shrink: 0; }
         .em-side-divider { height: 1px; margin: 10px 6px; }
         .em-sidebar-bottom { margin-top: auto; display: grid; gap: 10px; }
         .em-usage-card { border-radius: 16px; padding: 12px 14px; }
         .em-side-btn { width: 100%; }
         .em-side-row { display: flex; align-items: center; gap: 10px; }
-        .em-credit { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; }
+        .em-credit { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; }
         .em-shell.is-collapsed .em-label, .em-shell.is-collapsed .em-label-block { display: none !important; }
         .em-shell.is-collapsed .em-sidebar-top { flex-direction: column; }
         .em-shell.is-collapsed .em-side-link { justify-content: center; padding: 11px 0; }
@@ -3202,19 +3204,19 @@ export default function Home() {
         .em-hero-center .em-solver-card { text-align: left; margin-top: 30px; }
         .em-photo-hidden { display: none; }
         .em-prompt-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 14px; padding-top: 14px; }
-        .em-tool-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid; border-radius: 11px; padding: 9px 13px; font-weight: 800; font-size: 14px; cursor: pointer; }
+        .em-tool-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid; border-radius: 11px; padding: 9px 13px; font-weight: 800; font-size: 15px; cursor: pointer; }
         .em-tool-btn.is-live { box-shadow: 0 0 0 4px rgba(124,58,237,0.18); }
-        .em-level-select { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; font-size: 13px; }
-        .em-level-select select { border: 1px solid; border-radius: 11px; padding: 9px 10px; font-weight: 800; font-size: 14px; cursor: pointer; }
+        .em-level-select { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; font-size: 14px; }
+        .em-level-select select { border: 1px solid; border-radius: 11px; padding: 9px 10px; font-weight: 800; font-size: 15px; cursor: pointer; }
         .em-quick { margin-top: 30px; text-align: left; }
-        .em-quick-head { font-weight: 800; font-size: 14px; margin-bottom: 12px; }
+        .em-quick-head { font-weight: 800; font-size: 15px; margin-bottom: 12px; }
         .em-quick-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
         .em-quick-card { border-radius: 18px; padding: 16px; display: grid; gap: 8px; transition: transform .15s ease; }
         .em-quick-card:hover { transform: translateY(-2px); }
         .em-quick-icon { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; background: linear-gradient(135deg,#7C3AED,#2563EB); color: #fff; font-weight: 900; font-size: 17px; }
-        .em-quick-example { font-size: 14px; font-weight: 600; }
+        .em-quick-example { font-size: 15px; font-weight: 600; }
         .em-quick-actions { display: flex; gap: 14px; }
-        .em-quick-actions button { background: none; border: none; padding: 0; font-weight: 800; font-size: 13.5px; cursor: pointer; }
+        .em-quick-actions button { background: none; border: none; padding: 0; font-weight: 800; font-size: 14.5px; cursor: pointer; }
         .em-demo-wrap { margin-top: 30px; text-align: left; }
         .em-welcome-backdrop { position: fixed; inset: 0; z-index: 200; background: rgba(2,6,23,0.6); display: grid; place-items: center; padding: 16px; backdrop-filter: blur(4px); }
         .em-welcome { position: relative; width: min(640px, 100%); border-radius: 26px; overflow: hidden; box-shadow: 0 40px 100px rgba(0,0,0,0.4); }
@@ -3272,8 +3274,8 @@ export default function Home() {
           .em-hide-sm { display: none !important; }
           .em-hero { padding: 28px 0 36px; }
           .em-hero-title { font-size: 34px; margin-top: 14px; }
-          .em-hero-lead { font-size: 16px; margin-top: 12px; }
-          .em-trust { font-size: 13.5px; gap: 6px 14px; margin-top: 16px; }
+          .em-hero-lead { font-size: 16.5px; margin-top: 12px; }
+          .em-trust { font-size: 14.5px; gap: 6px 14px; margin-top: 16px; }
           .em-hero-proof { display: none; }
           .em-solver-card { padding: 18px 16px; border-radius: 22px; }
           .em-drop-hint { display: none; }
@@ -3281,14 +3283,14 @@ export default function Home() {
           .em-workspace-section { padding: 8px 0 56px; }
           .em-section-head { margin-bottom: 28px; }
           .em-h2 { font-size: 30px; }
-          .em-lead { font-size: 16px; }
+          .em-lead { font-size: 16.5px; }
           .em-card { padding: 18px 16px; border-radius: 20px; }
           .em-progress-grid { grid-template-columns: 1fr; }
           .em-grid-3, .em-grid-4 { grid-template-columns: 1fr; }
           .em-value { padding: 26px 20px; gap: 24px; }
           .em-value-stats { grid-template-columns: 1fr 1fr; }
           .em-compare { padding: 4px 14px; }
-          .em-compare-row { grid-template-columns: 1fr 1fr; font-size: 13px; }
+          .em-compare-row { grid-template-columns: 1fr 1fr; font-size: 14px; }
           .em-compare-row > :first-child { grid-column: 1 / -1; }
           .em-compare-head > :first-child { display: none; }
           .em-plans { grid-template-columns: 1fr; }
@@ -3372,7 +3374,7 @@ export default function Home() {
                 border: `1px solid ${darkMode ? "rgba(124,58,237,0.35)" : "#e4dbff"}`,
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: "13px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: "14px" }}>
                 <span>{planLabel} plan</span>
                 <span style={{ color: darkMode ? "#86EFAC" : "#059669" }}>
                   {solverUnlimited ? "∞" : `${Math.max(0, dailyLimit - dailyUsed)} left`}
@@ -3389,7 +3391,7 @@ export default function Home() {
                   />
                 </div>
               )}
-              <div style={{ marginTop: "8px", color: theme.muted, fontSize: "12px", fontWeight: 600 }}>
+              <div style={{ marginTop: "8px", color: theme.muted, fontSize: "13px", fontWeight: 600 }}>
                 {usageLabel}
               </div>
             </div>
@@ -3511,8 +3513,8 @@ export default function Home() {
                 flexWrap: "wrap",
               }}
             >
-              <span style={{ fontWeight: 800, fontSize: "14px" }}>Ask EasyMath</span>
-              <span style={{ color: theme.muted, fontSize: "13px", fontWeight: 700 }}>
+              <span style={{ fontWeight: 800, fontSize: "15px" }}>Ask EasyMath</span>
+              <span style={{ color: theme.muted, fontSize: "14px", fontWeight: 700 }}>
                 {usageLabel}
               </span>
             </div>
@@ -3540,7 +3542,7 @@ export default function Home() {
                     ? "#172554"
                     : "#eff6ff",
                 fontWeight: 700,
-                fontSize: "14px",
+                fontSize: "15px",
                 lineHeight: 1.55,
               }}
             >
@@ -3554,7 +3556,7 @@ export default function Home() {
                       marginTop: "8px",
                       fontWeight: 600,
                       color: theme.muted,
-                      fontSize: "13px",
+                      fontSize: "14px",
                     }}
                   >
                     Practice Mode stays available and does not use this limit.
@@ -3658,7 +3660,7 @@ export default function Home() {
                     borderRadius: "999px",
 
                     fontWeight: 700,
-                    fontSize: "13px",
+                    fontSize: "14px",
                     cursor: solverLimitReached ? "not-allowed" : "pointer",
                   }}
                 >
@@ -3700,7 +3702,7 @@ export default function Home() {
               <div
                 style={{
                   fontWeight: 900,
-                  fontSize: "13px",
+                  fontSize: "14px",
                   marginBottom: "6px",
                   letterSpacing: "0.06em",
                   textTransform: "uppercase",
@@ -3713,7 +3715,7 @@ export default function Home() {
               <div
                 style={{
                   color: theme.muted,
-                  fontSize: "14px",
+                  fontSize: "15px",
                   marginBottom: "14px",
                 }}
               >
@@ -3856,7 +3858,7 @@ export default function Home() {
                       style={{
                         marginTop: "10px",
                         color: theme.muted,
-                        fontSize: "13px",
+                        fontSize: "14px",
                         fontWeight: 600,
                       }}
                     >
@@ -3877,7 +3879,7 @@ export default function Home() {
                       <div
                         style={{
                           fontWeight: 900,
-                          fontSize: "12px",
+                          fontSize: "13px",
                           letterSpacing: "0.06em",
                           color: darkMode ? "#86efac" : "#15803d",
                         }}
@@ -3888,7 +3890,7 @@ export default function Home() {
                         style={{
                           marginTop: "6px",
                           color: theme.muted,
-                          fontSize: "13px",
+                          fontSize: "14px",
                           fontWeight: 600,
                         }}
                       >
@@ -4073,7 +4075,7 @@ export default function Home() {
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                     <span className="em-quick-icon" aria-hidden="true">{item.icon}</span>
-                    <strong style={{ fontSize: "16px" }}>{item.label}</strong>
+                    <strong style={{ fontSize: "16.5px" }}>{item.label}</strong>
                   </div>
                   <div className="em-quick-example" style={{ color: theme.muted }}>
                     {item.example}
@@ -4128,7 +4130,7 @@ export default function Home() {
                   style={{
                     color: "#16a34a",
 
-                    fontSize: "11px",
+                    fontSize: "13px",
 
                     fontWeight: 900,
                     letterSpacing: "0.08em",
@@ -4212,7 +4214,7 @@ export default function Home() {
                       color: theme.text,
 
                       fontWeight: 700,
-                      fontSize: "14px",
+                      fontSize: "15px",
                       lineHeight: 1.4,
 
                       cursor: "pointer",
@@ -4258,7 +4260,7 @@ export default function Home() {
 
                   color: theme.muted,
 
-                  fontSize: "14px",
+                  fontSize: "15px",
 
                   lineHeight: 1.6,
                 }}
@@ -4275,7 +4277,7 @@ export default function Home() {
                   style={{
                     color: "#7C3AED",
                     fontWeight: 900,
-                    fontSize: "11px",
+                    fontSize: "13px",
                     letterSpacing: "0.1em",
                     marginBottom: "4px",
                   }}
@@ -4333,7 +4335,7 @@ export default function Home() {
                         style={{
                           color: "#2563eb",
                           fontWeight: 900,
-                          fontSize: "11px",
+                          fontSize: "13px",
                           letterSpacing: "0.08em",
                         }}
                       >
@@ -4345,7 +4347,7 @@ export default function Home() {
                         style={{
                           marginTop: "6px",
                           fontWeight: 800,
-                          fontSize: "16px",
+                          fontSize: "16.5px",
                           lineHeight: 1.4,
                         }}
                       >
@@ -4357,7 +4359,7 @@ export default function Home() {
                           style={{
                             marginTop: "8px",
                             color: theme.muted,
-                            fontSize: "13px",
+                            fontSize: "14px",
                             fontWeight: 700,
                           }}
                         >
@@ -4450,7 +4452,7 @@ export default function Home() {
                         style={{
                           color: darkMode ? "#86efac" : "#15803d",
                           fontWeight: 800,
-                          fontSize: "14px",
+                          fontSize: "15px",
                         }}
                       >
                         ✅ {reportMessage}
@@ -4494,7 +4496,7 @@ export default function Home() {
                               borderRadius: "999px",
                               padding: "8px 12px",
                               fontWeight: 700,
-                              fontSize: "13px",
+                              fontSize: "14px",
                               cursor: "pointer",
                             }}
                           >
@@ -4516,12 +4518,12 @@ export default function Home() {
                           background: "transparent",
                           color: theme.text,
                           fontFamily: "inherit",
-                          fontSize: "14px",
+                          fontSize: "15px",
                           boxSizing: "border-box",
                         }}
                       />
                       {reportStatus === "error" && (
-                        <div role="status" style={{ color: "#f87171", fontWeight: 700, fontSize: "13px" }}>
+                        <div role="status" style={{ color: "#f87171", fontWeight: 700, fontSize: "14px" }}>
                           {reportMessage}
                         </div>
                       )}
@@ -4625,7 +4627,7 @@ export default function Home() {
               <div
                 style={{
                   fontWeight: 900,
-                  fontSize: "13px",
+                  fontSize: "14px",
                   marginBottom: "6px",
                   letterSpacing: "0.06em",
                   textTransform: "uppercase",
@@ -4638,7 +4640,7 @@ export default function Home() {
               <div
                 style={{
                   color: theme.muted,
-                  fontSize: "14px",
+                  fontSize: "15px",
                   marginBottom: "14px",
                   lineHeight: 1.5,
                 }}
@@ -4685,7 +4687,7 @@ export default function Home() {
                         padding: "9px 14px",
                         borderRadius: "999px",
                         fontWeight: 800,
-                        fontSize: "13px",
+                        fontSize: "14px",
                         cursor: "pointer",
                         boxShadow: selected
                           ? "0 8px 16px rgba(22,163,74,0.25)"
@@ -4707,7 +4709,7 @@ export default function Home() {
                   <div
                     style={{
                       color: theme.muted,
-                      fontSize: "13px",
+                      fontSize: "14px",
                       fontWeight: 700,
                       marginBottom: "8px",
                     }}
@@ -4752,7 +4754,7 @@ export default function Home() {
                       padding: "11px 16px",
                       borderRadius: "12px",
                       fontWeight: 800,
-                      fontSize: "14px",
+                      fontSize: "15px",
                       cursor: recommendedBusy ? "wait" : "pointer",
                       boxShadow: "0 8px 16px rgba(22,163,74,0.22)",
                     }}
@@ -4766,7 +4768,7 @@ export default function Home() {
                       style={{
                         marginTop: "8px",
                         color: theme.muted,
-                        fontSize: "12px",
+                        fontSize: "13px",
                         fontWeight: 700,
                         lineHeight: 1.45,
                       }}
@@ -4842,7 +4844,7 @@ export default function Home() {
                     <div
                       style={{
                         fontWeight: 800,
-                        fontSize: "13px",
+                        fontSize: "14px",
                         color: darkMode ? "#ddd6fe" : "#6d28d9",
                       }}
                     >
@@ -5123,7 +5125,7 @@ export default function Home() {
                               }`,
                               background: darkMode ? "#1e1b4b" : "#ffffff",
                               color: theme.text,
-                              fontSize: "16px",
+                              fontSize: "16.5px",
                               fontWeight: 700,
                             }}
                           />
@@ -5352,7 +5354,7 @@ export default function Home() {
                   <div
                     style={{
                       fontWeight: 800,
-                      fontSize: "13px",
+                      fontSize: "14px",
                       color: darkMode ? "#ddd6fe" : "#6d28d9",
                     }}
                   >
@@ -5407,7 +5409,7 @@ export default function Home() {
                         marginTop: "10px",
                         color: theme.muted,
                         fontWeight: 700,
-                        fontSize: "13px",
+                        fontSize: "14px",
                       }}
                     >
                       {currentReviewTopicLabel}
@@ -5427,7 +5429,7 @@ export default function Home() {
                         marginTop: "8px",
                         color: theme.muted,
                         fontWeight: 600,
-                        fontSize: "13px",
+                        fontSize: "14px",
                         lineHeight: 1.5,
                       }}
                     >
@@ -5460,7 +5462,7 @@ export default function Home() {
                         }`,
                         background: darkMode ? "#1e1b4b" : "#ffffff",
                         color: theme.text,
-                        fontSize: "16px",
+                        fontSize: "16.5px",
                         fontWeight: 700,
                       }}
                     />
@@ -5654,7 +5656,7 @@ export default function Home() {
             >
               <div
                 style={{
-                  fontSize: "11px",
+                  fontSize: "13px",
                   fontWeight: 900,
                   letterSpacing: "0.06em",
                   textTransform: "uppercase",
@@ -5667,7 +5669,7 @@ export default function Home() {
                 style={{
                   marginTop: "8px",
                   fontWeight: 800,
-                  fontSize: "14px",
+                  fontSize: "15px",
                   lineHeight: 1.45,
                 }}
               >
@@ -5678,7 +5680,7 @@ export default function Home() {
                   marginTop: "6px",
                   color: theme.muted,
                   fontWeight: 700,
-                  fontSize: "13px",
+                  fontSize: "14px",
                 }}
               >
                 Plan: {planLabel}
@@ -5704,7 +5706,7 @@ export default function Home() {
                   padding: "9px 13px",
                   borderRadius: "11px",
                   fontWeight: 800,
-                  fontSize: "13px",
+                  fontSize: "14px",
                   cursor: "pointer",
                 }}
               >
@@ -5757,7 +5759,7 @@ export default function Home() {
                 >
                   <div
                     style={{
-                      fontSize: "11px",
+                      fontSize: "13px",
                       fontWeight: 800,
                       letterSpacing: "0.04em",
                       textTransform: "uppercase",
@@ -5770,7 +5772,7 @@ export default function Home() {
                     style={{
                       marginTop: "6px",
                       fontWeight: 900,
-                      fontSize: "16px",
+                      fontSize: "16.5px",
                       lineHeight: 1.3,
                     }}
                   >
@@ -5793,7 +5795,7 @@ export default function Home() {
               >
                 <div
                   style={{
-                    fontSize: "11px",
+                    fontSize: "13px",
                     fontWeight: 900,
                     letterSpacing: "0.06em",
                     textTransform: "uppercase",
@@ -5836,7 +5838,7 @@ export default function Home() {
                           justifyContent: "space-between",
                           alignItems: "baseline",
                           gap: "8px",
-                          fontSize: "13px",
+                          fontSize: "14px",
                           lineHeight: 1.35,
                         }}
                       >
@@ -5856,7 +5858,7 @@ export default function Home() {
                             justifyContent: "flex-end",
                             color: theme.muted,
                             fontWeight: 700,
-                            fontSize: "12px",
+                            fontSize: "13px",
                             textAlign: "right",
                           }}
                         >
@@ -5890,7 +5892,7 @@ export default function Home() {
             >
               <div
                 style={{
-                  fontSize: "11px",
+                  fontSize: "13px",
                   fontWeight: 900,
                   letterSpacing: "0.06em",
                   textTransform: "uppercase",
@@ -5905,7 +5907,7 @@ export default function Home() {
                     style={{
                       marginTop: "8px",
                       fontWeight: 900,
-                      fontSize: "16px",
+                      fontSize: "16.5px",
                       lineHeight: 1.3,
                     }}
                   >
@@ -5939,7 +5941,7 @@ export default function Home() {
                       padding: "10px 14px",
                       borderRadius: "11px",
                       fontWeight: 800,
-                      fontSize: "13px",
+                      fontSize: "14px",
                       cursor:
                         reviewChecking ||
                         practiceChecking ||
@@ -5958,7 +5960,7 @@ export default function Home() {
                   style={{
                     marginTop: "8px",
                     fontWeight: 700,
-                    fontSize: "14px",
+                    fontSize: "15px",
                     lineHeight: 1.5,
                     color: theme.text,
                   }}
@@ -5978,7 +5980,7 @@ export default function Home() {
               >
                 <div
                   style={{
-                    fontSize: "12px",
+                    fontSize: "13px",
                     fontWeight: 900,
                     letterSpacing: "0.06em",
                     textTransform: "uppercase",
@@ -6007,7 +6009,7 @@ export default function Home() {
                       <div
                         style={{
                           fontWeight: 700,
-                          fontSize: "13px",
+                          fontSize: "14px",
                           lineHeight: 1.4,
                         }}
                       >
@@ -6017,7 +6019,7 @@ export default function Home() {
                         style={{
                           marginTop: "4px",
                           color: theme.muted,
-                          fontSize: "12px",
+                          fontSize: "13px",
                           fontWeight: 600,
                         }}
                       >
@@ -6163,7 +6165,7 @@ export default function Home() {
                 marginTop: "8px",
                 color: theme.muted,
                 fontWeight: 600,
-                fontSize: "14px",
+                fontSize: "15px",
                 lineHeight: 1.5,
               }}
             >
@@ -6176,7 +6178,7 @@ export default function Home() {
                 display: "block",
                 marginTop: "18px",
                 fontWeight: 800,
-                fontSize: "13px",
+                fontSize: "14px",
               }}
             >
               Email
@@ -6203,7 +6205,7 @@ export default function Home() {
                 display: "block",
                 marginTop: "14px",
                 fontWeight: 800,
-                fontSize: "13px",
+                fontSize: "14px",
               }}
             >
               Password
@@ -6244,7 +6246,7 @@ export default function Home() {
                     background: "transparent",
                     color: darkMode ? "#93c5fd" : "#1d4ed8",
                     fontWeight: 800,
-                    fontSize: "13px",
+                    fontSize: "14px",
                     cursor: authBusy ? "wait" : "pointer",
                     padding: 0,
                   }}
@@ -6263,7 +6265,7 @@ export default function Home() {
                   background: darkMode ? "#422006" : "#fffbeb",
                   border: "1px solid #f59e0b",
                   fontWeight: 700,
-                  fontSize: "13px",
+                  fontSize: "14px",
                   lineHeight: 1.5,
                 }}
               >
@@ -6407,7 +6409,7 @@ export default function Home() {
                     style={{
                       color: theme.muted,
                       fontWeight: 800,
-                      fontSize: "13px",
+                      fontSize: "14px",
                     }}
                   >
                     {row.label}
@@ -6415,7 +6417,7 @@ export default function Home() {
                   <span
                     style={{
                       fontWeight: 800,
-                      fontSize: "13px",
+                      fontSize: "14px",
                       textAlign: "right",
                     }}
                   >
@@ -6455,7 +6457,7 @@ export default function Home() {
               <div
                 style={{
                   fontWeight: 900,
-                  fontSize: "13px",
+                  fontSize: "14px",
                   letterSpacing: "0.06em",
                   color: "#f87171",
                   textTransform: "uppercase",
@@ -6467,7 +6469,7 @@ export default function Home() {
                 style={{
                   margin: "8px 0 0",
                   color: theme.muted,
-                  fontSize: "13px",
+                  fontSize: "14px",
                   fontWeight: 600,
                   lineHeight: 1.5,
                 }}
@@ -6504,7 +6506,7 @@ export default function Home() {
                     style={{
                       display: "grid",
                       gap: "6px",
-                      fontSize: "12px",
+                      fontSize: "13px",
                       fontWeight: 800,
                       color: theme.muted,
                     }}
@@ -6527,7 +6529,7 @@ export default function Home() {
                         color: theme.text,
                         padding: "11px 12px",
                         fontWeight: 700,
-                        fontSize: "14px",
+                        fontSize: "15px",
                       }}
                     />
                   </label>
@@ -6535,7 +6537,7 @@ export default function Home() {
                     <div
                       style={{
                         color: "#fca5a5",
-                        fontSize: "13px",
+                        fontSize: "14px",
                         fontWeight: 700,
                       }}
                     >
@@ -6663,7 +6665,7 @@ export default function Home() {
                 <div
                   style={{
                     color: "#7c3aed",
-                    fontSize: "11px",
+                    fontSize: "13px",
                     fontWeight: 900,
                     letterSpacing: "0.08em",
                   }}
@@ -6685,7 +6687,7 @@ export default function Home() {
                     marginTop: "8px",
                     color: theme.muted,
                     fontWeight: 600,
-                    fontSize: "14px",
+                    fontSize: "15px",
                     lineHeight: 1.55,
                     maxWidth: "520px",
                   }}
@@ -6724,7 +6726,7 @@ export default function Home() {
                 <div
                   style={{
                     fontWeight: 900,
-                    fontSize: "12px",
+                    fontSize: "13px",
                     letterSpacing: "0.06em",
                     color: theme.muted,
                   }}
@@ -6746,7 +6748,7 @@ export default function Home() {
                     marginTop: "4px",
                     color: theme.muted,
                     fontWeight: 700,
-                    fontSize: "13px",
+                    fontSize: "14px",
                   }}
                 >
                   Your current plan
@@ -6761,7 +6763,7 @@ export default function Home() {
                     display: "grid",
                     gap: "9px",
                     fontWeight: 600,
-                    fontSize: "14px",
+                    fontSize: "15px",
                     lineHeight: 1.45,
                     color: theme.text,
                   }}
@@ -6816,7 +6818,7 @@ export default function Home() {
                     background: "linear-gradient(135deg,#7c3aed,#2563eb)",
                     color: "white",
                     fontWeight: 900,
-                    fontSize: "11px",
+                    fontSize: "13px",
                     letterSpacing: "0.04em",
                   }}
                 >
@@ -6825,7 +6827,7 @@ export default function Home() {
                 <div
                   style={{
                     fontWeight: 900,
-                    fontSize: "12px",
+                    fontSize: "13px",
                     letterSpacing: "0.06em",
                     color: darkMode ? "#c4b5fd" : "#6d28d9",
                   }}
@@ -6847,7 +6849,7 @@ export default function Home() {
                     marginTop: "4px",
                     color: theme.muted,
                     fontWeight: 700,
-                    fontSize: "13px",
+                    fontSize: "14px",
                   }}
                 >
                   Unlimited solving when Pro launches
@@ -6859,7 +6861,7 @@ export default function Home() {
                     display: "grid",
                     gap: "9px",
                     fontWeight: 600,
-                    fontSize: "14px",
+                    fontSize: "15px",
                     lineHeight: 1.45,
                     color: theme.text,
                   }}

@@ -58,7 +58,7 @@ export function SectionHead({
           color: dark ? "#c4b5fd" : "#6d28d9",
           border: `1px solid ${dark ? "rgba(124,58,237,0.35)" : "#e4dbff"}`,
           fontWeight: 800,
-          fontSize: 12,
+          fontSize: 13,
           letterSpacing: "0.08em",
         }}
       >
@@ -279,7 +279,7 @@ export function Subjects({ dark, theme }: SectionProps) {
               <div style={{ fontWeight: 900, fontSize: 18, color: theme.text }}>
                 {subject.level}
               </div>
-              <div style={{ marginTop: 4, color: theme.muted, fontSize: 13, fontWeight: 700 }}>
+              <div style={{ marginTop: 4, color: theme.muted, fontSize: 14, fontWeight: 700 }}>
                 {subject.ages}
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 16 }}>
@@ -289,7 +289,7 @@ export function Subjects({ dark, theme }: SectionProps) {
                     style={{
                       padding: "6px 10px",
                       borderRadius: 999,
-                      fontSize: 12.5,
+                      fontSize: 13.5,
                       fontWeight: 700,
                       color: theme.text,
                       background: dark ? "#111c33" : "#f1f5f9",
@@ -343,7 +343,7 @@ export function ValueStrip({
           }}
         >
           <div className="em-value-copy">
-            <div style={{ fontWeight: 800, fontSize: 12, letterSpacing: "0.1em", color: "#c7d2fe" }}>
+            <div style={{ fontWeight: 800, fontSize: 13, letterSpacing: "0.1em", color: "#c7d2fe" }}>
               FREE, FOR REAL
             </div>
             <h2 className="em-h2" style={{ color: "#fff", marginTop: 10 }}>
@@ -362,7 +362,7 @@ export function ValueStrip({
               {VALUE_POINTS.map((point) => (
                 <div key={point.label}>
                   <div style={{ fontSize: 30, fontWeight: 900, color: "#86EFAC" }}>{point.big}</div>
-                  <div style={{ fontSize: 13, color: "#dbeafe", fontWeight: 600, lineHeight: 1.4 }}>
+                  <div style={{ fontSize: 14, color: "#dbeafe", fontWeight: 600, lineHeight: 1.4 }}>
                     {point.label}
                   </div>
                 </div>
@@ -391,7 +391,7 @@ export function ValueStrip({
             ))}
           </div>
         </div>
-        <p style={{ color: theme.muted, fontSize: 12, textAlign: "center", marginTop: 12 }}>
+        <p style={{ color: theme.muted, fontSize: 13, textAlign: "center", marginTop: 12 }}>
           Comparison reflects common free-plan limits across popular math apps and may vary by app and region.
         </p>
       </div>
@@ -436,7 +436,7 @@ export function Plans({
         />
         <div className="em-plans">
           <div style={card(theme, { padding: 30 })}>
-            <div style={{ fontWeight: 900, letterSpacing: "0.08em", fontSize: 13, color: dark ? "#86EFAC" : "#059669" }}>
+            <div style={{ fontWeight: 900, letterSpacing: "0.08em", fontSize: 14, color: dark ? "#86EFAC" : "#059669" }}>
               FREE
             </div>
             <div style={{ fontSize: 40, fontWeight: 900, marginTop: 8, color: theme.text }}>
@@ -461,7 +461,7 @@ export function Plans({
                 : "linear-gradient(160deg,#faf5ff 0%,#eff6ff 55%,#ffffff 100%)",
             })}
           >
-            <div style={{ fontWeight: 900, letterSpacing: "0.08em", fontSize: 13, color: dark ? "#c4b5fd" : "#6d28d9" }}>
+            <div style={{ fontWeight: 900, letterSpacing: "0.08em", fontSize: 14, color: dark ? "#c4b5fd" : "#6d28d9" }}>
               PRO
             </div>
             <div style={{ fontSize: 40, fontWeight: 900, marginTop: 8, color: theme.text }}>
@@ -609,7 +609,7 @@ export function SolutionPreview({ dark, theme }: SectionProps) {
             border: `1px solid ${dark ? "#166534" : "#bbf7d0"}`,
           }}
         >
-          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.08em", color: dark ? "#86EFAC" : "#15803d" }}>
+          <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "0.08em", color: dark ? "#86EFAC" : "#15803d" }}>
             FINAL ANSWER
           </div>
           <MathText text="$x = 5$" style={{ fontSize: 20, marginTop: 4, color: theme.text }} />
@@ -622,7 +622,7 @@ export function SolutionPreview({ dark, theme }: SectionProps) {
             border: `1px solid ${dark ? "#1e3a8a" : "#bfdbfe"}`,
           }}
         >
-          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.08em", color: dark ? "#93c5fd" : "#1d4ed8" }}>
+          <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "0.08em", color: dark ? "#93c5fd" : "#1d4ed8" }}>
             STEP-BY-STEP
           </div>
           <MathText

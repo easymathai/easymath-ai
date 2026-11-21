@@ -77,7 +77,7 @@ export default function TutorSolution({
     borderRadius: 999,
     padding: "9px 14px",
     fontWeight: 800,
-    fontSize: 13.5,
+    fontSize: 14.5,
     cursor: "pointer",
   } as const;
 
@@ -104,7 +104,7 @@ export default function TutorSolution({
           <div className="em-tutor-kicker" style={{ color: dark ? "#86EFAC" : "#059669" }}>
             ANSWER
           </div>
-          <MathText text={finalAnswer} style={{ fontSize: 22, fontWeight: 800, color: theme.text }} />
+          <MathText text={finalAnswer} style={{ fontSize: 18, fontWeight: 700, color: theme.text }} />
         </div>
       ) : null}
 
@@ -118,7 +118,7 @@ export default function TutorSolution({
               <li key={index} className="em-tutor-step" style={{ borderColor: theme.border }}>
                 <span className="em-tutor-num" aria-hidden="true">{index + 1}</span>
                 <div style={{ minWidth: 0 }}>
-                  <MathText text={step.body} style={{ whiteSpace: "pre-wrap", lineHeight: 1.75, color: theme.text }} />
+                  <MathText text={step.body} style={{ whiteSpace: "pre-wrap", fontSize: 16, lineHeight: 1.6, color: theme.text }} />
                   {step.why ? (
                     <div className="em-tutor-why" style={{ color: theme.muted }}>
                       <strong style={{ color: dark ? "#86EFAC" : "#059669" }}>Why:</strong>{" "}
@@ -142,7 +142,7 @@ export default function TutorSolution({
               >
                 Show all steps
               </button>
-              <span style={{ color: theme.muted, fontSize: 13, fontWeight: 600 }}>
+              <span style={{ color: theme.muted, fontSize: 14, fontWeight: 600 }}>
                 Try the next step yourself first 💡
               </span>
             </div>

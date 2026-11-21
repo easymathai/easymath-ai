@@ -43,7 +43,7 @@ body {
 
 /* KaTeX math inside solutions (MathText). */
 .easymath-math .katex {
-  font-size: 1.12em;
+  font-size: 1.1em;
 }
 .easymath-math-display {
   display: block;

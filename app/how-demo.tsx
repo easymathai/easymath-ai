@@ -23,7 +23,7 @@ export default function HowDemo({ dark, compact = false }: { dark: boolean; comp
       <style>{`
         .em-demo { position: relative; border: 1px solid; border-radius: 24px; overflow: hidden; display: grid; grid-template-columns: 1fr 1.25fr; gap: 22px; padding: 26px; min-height: 250px; align-items: center; }
         .em-demo--compact { border-radius: 0; border: none; min-height: 220px; padding: 26px 28px 8px; }
-        .em-demo-steps-label { position: absolute; top: 14px; left: 26px; display: flex; gap: 8px; font-size: 11px; font-weight: 900; letter-spacing: .08em; }
+        .em-demo-steps-label { position: absolute; top: 14px; left: 26px; display: flex; gap: 8px; font-size: 13px; font-weight: 900; letter-spacing: .08em; }
         .em-demo-steps-label span { opacity: .35; animation: em-demo-tab 9s infinite; }
         .em-demo-steps-label span:nth-child(2) { animation-delay: 3s; }
         .em-demo-steps-label span:nth-child(3) { animation-delay: 6s; }
@@ -34,7 +34,7 @@ export default function HowDemo({ dark, compact = false }: { dark: boolean; comp
         .em-demo-scan { position: absolute; left: 0; right: 0; height: 36%; top: -40%; background: linear-gradient(180deg, transparent, rgba(124,58,237,.35), transparent); border-bottom: 2px solid #7C3AED; animation: em-demo-scan 9s infinite; }
         @keyframes em-demo-scan { 0% { top: -40%; } 22% { top: 100%; } 23%, 100% { top: 140%; } }
         .em-demo-right { display: grid; gap: 8px; margin-top: 14px; }
-        .em-demo-read, .em-demo-line, .em-demo-answer { opacity: 0; transform: translateY(8px); border-radius: 12px; padding: 9px 12px; font-size: 14px; font-weight: 700; animation: em-demo-in 9s infinite; }
+        .em-demo-read, .em-demo-line, .em-demo-answer { opacity: 0; transform: translateY(8px); border-radius: 12px; padding: 9px 12px; font-size: 15px; font-weight: 700; animation: em-demo-in 9s infinite; }
         .em-demo-read { animation-delay: 2.2s; }
         .em-demo-line:nth-of-type(2) { animation-delay: 3.6s; }
         .em-demo-line:nth-of-type(3) { animation-delay: 4.6s; }

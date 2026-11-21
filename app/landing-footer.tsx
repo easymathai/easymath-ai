@@ -15,7 +15,7 @@ export default function LandingFooter({ dark, muted, text, border }: LandingFoot
   const headStyle = {
     color: text,
     fontWeight: 800,
-    fontSize: 13,
+    fontSize: 14,
     letterSpacing: "0.06em",
     marginBottom: 14,
   } as const;
@@ -26,7 +26,7 @@ export default function LandingFooter({ dark, muted, text, border }: LandingFoot
         borderTop: `1px solid ${border}`,
         background: dark ? "#08101d" : "#ffffff",
         color: muted,
-        fontSize: 14,
+        fontSize: 15,
       }}
     >
       <div className="em-container em-footer-grid">
