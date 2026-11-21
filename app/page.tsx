@@ -3486,7 +3486,7 @@ export default function Home() {
               What can I help you <span className="em-gradient-text">solve</span> today?
             </h1>
             <p className="em-hero-lead" style={{ color: theme.muted }}>
-              Type it, snap it or say it. Get every step explained at your level — 10 free solves a day, no ads.
+              Type it, snap it or say it. Get every step explained at your level — 5 free solves a day (including 1 photo), no ads.
             </p>
           </div>
 
@@ -6095,7 +6095,7 @@ export default function Home() {
               </h2>
               <p style={{ margin: "10px 0 0", color: theme.muted, lineHeight: 1.6 }}>
                 Snap or type any math problem. We read it, you check it, and your
-                personal Ai tutor explains every step. 10 free solves a day — no ads, no sign-up.
+                personal Ai tutor explains every step. 5 free solves a day, including 1 photo — no ads, no sign-up.
               </p>
               <div style={{ display: "flex", gap: "10px", marginTop: "20px", flexWrap: "wrap" }}>
                 <button type="button" className="em-btn em-btn-primary" onClick={() => closeWelcome(true)}>
