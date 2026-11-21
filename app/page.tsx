@@ -6024,7 +6024,7 @@ export default function Home() {
           style={{
             position: "fixed",
             inset: 0,
-            zIndex: 50,
+            zIndex: 70,
             background: "rgba(15,23,42,0.55)",
             display: "grid",
             placeItems: "center",
@@ -6236,7 +6236,7 @@ export default function Home() {
           style={{
             position: "fixed",
             inset: 0,
-            zIndex: 50,
+            zIndex: 70,
             background: "rgba(15,23,42,0.55)",
             display: "grid",
             placeItems: "center",
@@ -6388,7 +6388,7 @@ export default function Home() {
           style={{
             position: "fixed",
             inset: 0,
-            zIndex: 50,
+            zIndex: 70,
             background: "rgba(15,23,42,0.58)",
             display: "grid",
             placeItems: "center",
